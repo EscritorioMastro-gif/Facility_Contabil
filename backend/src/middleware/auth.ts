@@ -60,7 +60,9 @@ async function verifyJwks(token: string): Promise<Verificado | null> {
     };
   } catch (err) {
     if (err instanceof joseErrors.JWTExpired) return null; // vencido é definitivo
-    const motivo = err instanceof joseErrors.JOSEError ? err.code : (err as Error).message;
+    let motivo = err instanceof joseErrors.JOSEError ? err.code : (err as Error).message;
+    // qual dado não bateu (iss/aud/nbf) — nunca o valor do token
+    if (err instanceof joseErrors.JWTClaimValidationFailed) motivo += ` (${err.claim}: ${err.reason})`;
     throw new JwksNaoConfirmou(motivo);
   }
 }
@@ -70,7 +72,10 @@ let avisouJwks = false;
 function avisarJwksDivergente(motivo: string): void {
   if (avisouJwks) return;
   avisouJwks = true;
-  logger.warn({ motivo }, 'JWKS recusou um token que o Supabase aceitou — conferir chaves/emissor do projeto');
+  logger.warn(
+    { motivo, emissorEsperado: JSON.stringify(expectedIssuer) },
+    'JWKS recusou um token que o Supabase aceitou — conferir chaves/emissor do projeto',
+  );
 }
 
 /** Verificação simétrica HS256 (projetos legados, só com SUPABASE_JWT_SECRET). */

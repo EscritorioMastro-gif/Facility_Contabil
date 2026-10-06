@@ -15,7 +15,10 @@ function optional(name: string, fallback = ''): string {
 
 const semBarraFinal = (url: string) => url.trim().replace(/\/+$/, '');
 
-const supabaseUrl = required('SUPABASE_URL').replace(/\/$/, '');
+// Limpo de espaço/quebra de linha/barras no fim: um caractere invisível colado
+// junto no painel do Render passava despercebido no resto do sistema (o URL()
+// limpa sozinho), mas fazia o emissor dos tokens não bater (2026-10-06).
+const supabaseUrl = semBarraFinal(required('SUPABASE_URL'));
 
 export const config = {
   env: optional('NODE_ENV', 'development'),
