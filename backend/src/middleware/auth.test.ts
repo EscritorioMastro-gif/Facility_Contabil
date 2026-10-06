@@ -51,6 +51,23 @@ describe('requireAuth (HS256 local)', () => {
     }
   });
 
+  it('atrás da Cloudflare, o bloqueio usa o IP real (CF-Connecting-IP), não o do proxy', async () => {
+    for (let i = 0; i < 30; i++) {
+      await request(app).get('/api/me').set('CF-Connecting-IP', '203.0.113.7').set('Authorization', 'Bearer a.b.c');
+    }
+    const atacante = await request(app)
+      .get('/api/me')
+      .set('CF-Connecting-IP', '203.0.113.7')
+      .set('Authorization', `Bearer ${valido()}`);
+    expect(atacante.status).toBe(429);
+    // outra pessoa, mesmo chegando pelo mesmo proxy, segue entrando
+    const outra = await request(app)
+      .get('/api/me')
+      .set('CF-Connecting-IP', '198.51.100.9')
+      .set('Authorization', `Bearer ${valido()}`);
+    expect(outra.status).toBe(200);
+  });
+
   it('IP que erra o login demais leva 429 — nem o token é mais conferido', async () => {
     for (let i = 0; i < 30; i++) {
       const r = await request(app).get('/api/me').set('Authorization', 'Bearer a.b.c');

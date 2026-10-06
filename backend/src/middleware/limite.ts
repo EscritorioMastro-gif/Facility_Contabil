@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from 'express';
 import { HttpError } from '../lib/httpError.js';
+import { ipDoCliente } from '../lib/ip.js';
 
 type Janela = { inicio: number; usados: number };
 
@@ -41,7 +42,7 @@ export function limitador(opts: {
   return Object.assign(mw, { limpar: () => contas.clear() });
 }
 
-const porIp = (req: Request) => `ip:${req.ip ?? 'desconhecido'}`;
+const porIp = (req: Request) => `ip:${ipDoCliente(req)}`;
 /** Depois do requireAuth: a cota é do login (o escritório inteiro sai pelo mesmo IP). */
 const porLogin = (req: Request) => (req.auth ? `u:${req.auth.userId}` : porIp(req));
 

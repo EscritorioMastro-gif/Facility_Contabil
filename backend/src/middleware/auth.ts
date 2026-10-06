@@ -4,6 +4,7 @@ import { createRemoteJWKSet, jwtVerify, decodeProtectedHeader, decodeJwt, errors
 import { config } from '../config.js';
 import { anonClient, userClient } from '../supabase.js';
 import { HttpError, unauthorized } from '../lib/httpError.js';
+import { ipDoCliente } from '../lib/ip.js';
 
 type Papel = 'escritorio' | 'cliente';
 type Identity = { userId: string; email: string | null; papel: Papel };
@@ -160,7 +161,7 @@ export function _limparEstadoDeAuth(): void {
 }
 
 export async function requireAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
-  const ip = req.ip ?? 'desconhecido';
+  const ip = ipDoCliente(req);
   const agora = Date.now();
   try {
     if (bloqueado(ip, agora)) {
