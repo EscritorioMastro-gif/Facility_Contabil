@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from ..schemas import NormalizedTransaction, ParseResult
 from .common import parse_date, to_cents
+from .limites import ArquivoPesadoError, conferir_paginas_pdf
 
 
 class EncryptedPdfError(Exception):
@@ -76,7 +77,10 @@ def open_pdf(content: bytes, password: str | None):
 
     try:
         with pdfplumber.open(io.BytesIO(content), password=password or "") as pdf:
+            conferir_paginas_pdf(len(pdf.pages))
             yield pdf
+    except ArquivoPesadoError:
+        raise
     except PDFPasswordIncorrect as e:
         raise EncryptedPdfError(
             "PDF protegido por senha. Informe a senha do extrato, ou mande em OFX/CSV."

@@ -19,7 +19,7 @@ import {
   listStatementsQuerySchema,
 } from '../statements/schema.js';
 import { callParser, type ParseResult } from '../statements/parserClient.js';
-import { detectFormat, gravarLancamentos, motivoRecusa, sanitizeName } from '../statements/router.js';
+import { detectFormat, gravarLancamentos, motivoRecusa, sanitizeName, tipoPorNome } from '../statements/router.js';
 import { empresasDoLogin, exigirEmpresa } from './acesso.js';
 import { paraExtrato, paraLancamento, STMT_COLS_PORTAL, TXN_COLS_PORTAL } from './formato.js';
 
@@ -127,7 +127,7 @@ portalExtratosRouter.post('/classificar', upload.single('file'), async (req, res
     const path = `${empresa.owner_id}/${statementId}/${sanitizeName(req.file.originalname)}`;
     const { error: upErr } = await admin.storage
       .from(BUCKET)
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+      .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
     if (upErr) {
       logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
     } else {

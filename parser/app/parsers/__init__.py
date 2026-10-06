@@ -3,12 +3,14 @@ from __future__ import annotations
 from ..schemas import FileFormat, ParseResult
 from .detect import detect_format
 from .excel import EncryptedFileError, parse_xls, parse_xlsx
+from .limites import ArquivoPesadoError
 from .ofx import parse_ofx
 from .pdf import EncryptedPdfError, UnreadablePdfError, parse_pdf
 from .planilha import PlanilhaInvalidaError, ler_planilha, parse_planilha
 from .tabular import NotAStatementError, parse_csv
 
 __all__ = [
+    "ArquivoPesadoError",
     "detect_format",
     "parse_statement",
     "ler_planilha",

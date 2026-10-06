@@ -1,19 +1,27 @@
 # Parser de extratos bancários (FastAPI)
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-python-multipart==0.0.20
-pydantic==2.10.4
-python-dotenv==1.0.1
+# Versões revisadas em 2026-10-06 contra o banco de vulnerabilidades OSV
+# (pdfminer.six: execução de código por PDF malicioso; python-multipart e
+# starlette: negação de serviço / contrabando de parâmetros).
+fastapi==0.142.2
+starlette==1.7.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+pydantic==2.13.5
+python-dotenv==1.2.4
 
 # leitura de arquivos
-pdfplumber==0.11.4
+pdfplumber==0.11.10
+pdfminer.six==20260107
 ofxparse==0.21
 openpyxl==3.1.5
+# a openpyxl usa defusedxml sozinha quando instalado: barra XML malicioso
+# (entidades externas / "billion laughs") dentro do .xlsx
+defusedxml==0.7.1
 xlrd==2.0.1
 pandas==2.2.3
 
 # dev / testes
-pytest==8.3.4
+pytest==9.1.1
 httpx==0.28.1
 # PDFs sintéticos nos testes do leitor de PDF (BB, Mercado Pago)
 reportlab==5.0.1

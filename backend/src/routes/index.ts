@@ -1,7 +1,8 @@
-import { Router } from 'express';
+import express, { Router, type NextFunction, type Request, type RequestHandler, type Response } from 'express';
 import { healthRouter } from './health.js';
 import { meRouter } from './me.js';
 import { requireAuth } from '../middleware/auth.js';
+import { limiteConvites, limiteUpload } from '../middleware/limite.js';
 import { clientsRouter } from '../clients/router.js';
 import { statementsRouter } from '../statements/router.js';
 import { rulesRouter } from '../rules/router.js';
@@ -14,16 +15,38 @@ import { porPapel, soEscritorio } from './papel.js';
 
 export const apiRouter = Router();
 
+// O corpo JSON só é lido depois do requireAuth: requisição sem login válido é
+// recusada antes de a API gastar memória/CPU com o corpo.
+const json = express.json({ limit: '1mb' });
+// salvar a revisão de um extrato grande manda até 10.000 lançamentos de uma vez
+const jsonRevisao = express.json({ limit: '10mb' });
+
+/** Aplica o limitador só nas rotas que recebem arquivo (cada uma vai pro leitor). */
+const UPLOAD = /^\/(excel(\/planilha)?|classificar|[^/]+\/reimport)?\/?$/;
+function soEmUpload(limite: RequestHandler): RequestHandler {
+  return (req: Request, res: Response, next: NextFunction) =>
+    req.method === 'POST' && UPLOAD.test(req.path) ? limite(req, res, next) : next();
+}
+const soEmPost = (limite: RequestHandler): RequestHandler => (req, res, next) =>
+  req.method === 'POST' ? limite(req, res, next) : next();
+
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/me', meRouter);
 // login do escritório segue nos routers de sempre; login de cliente (portal) só
 // enxerga a Classificação das empresas liberadas pra ele
-apiRouter.use('/clients', requireAuth, porPapel({ escritorio: clientsRouter, cliente: portalClientesRouter }));
-apiRouter.use('/statements', requireAuth, porPapel({ escritorio: statementsRouter, cliente: portalExtratosRouter }));
-apiRouter.use('/rules', requireAuth, soEscritorio, rulesRouter);
+apiRouter.use('/clients', requireAuth, json, porPapel({ escritorio: clientsRouter, cliente: portalClientesRouter }));
+apiRouter.use(
+  '/statements',
+  requireAuth,
+  soEmUpload(limiteUpload),
+  jsonRevisao,
+  porPapel({ escritorio: statementsRouter, cliente: portalExtratosRouter }),
+);
+apiRouter.use('/rules', requireAuth, soEscritorio, json, rulesRouter);
 apiRouter.use(
   '/classificacoes',
   requireAuth,
+  json,
   porPapel({ escritorio: classificacoesRouter, cliente: portalClassificacoesRouter }),
 );
-apiRouter.use('/acessos', requireAuth, soEscritorio, acessosRouter);
+apiRouter.use('/acessos', requireAuth, soEscritorio, soEmPost(limiteConvites), json, acessosRouter);

@@ -17,6 +17,16 @@ function db(req: { supabase?: SupabaseClient }): SupabaseClient {
   return req.supabase;
 }
 
+/**
+ * "contém o texto", seguro dentro de um filtro `.or()` do PostgREST. O texto
+ * digitado vai ENTRE ASPAS (vírgula, parêntese e ponto não abrem um filtro
+ * novo) e os curingas do LIKE (% e _) valem como texto comum.
+ */
+export function contemTexto(texto: string): string {
+  const literal = texto.replace(/[\\%_]/g, (c) => `\\${c}`);
+  return `"%${literal.replace(/["\\]/g, (c) => `\\${c}`)}%"`;
+}
+
 clientsRouter.get('/', async (req, res, next) => {
   try {
     const { q, ativo, limit } = clientListQuerySchema.parse(req.query);
@@ -25,8 +35,8 @@ clientsRouter.get('/', async (req, res, next) => {
     if (ativo !== 'all') query = query.eq('ativo', ativo === 'true');
     if (q) {
       const digits = q.replace(/\D/g, '');
-      const parts = [`razao_social.ilike.%${q}%`];
-      if (digits) parts.push(`cnpj.ilike.%${digits}%`);
+      const parts = [`razao_social.ilike.${contemTexto(q)}`];
+      if (digits) parts.push(`cnpj.ilike.${contemTexto(digits)}`);
       query = query.or(parts.join(','));
     }
 

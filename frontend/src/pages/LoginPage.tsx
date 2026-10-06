@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { supabase } from '@/lib/supabase';
+import { destinoSeguro } from '@/lib/destino';
+import { avisoDeInatividadePendente } from '@/auth/inatividade';
 import { FinanceIllustration } from '@/components/FinanceIllustration';
 
 /** As mensagens mais comuns do Supabase Auth, em português. */
@@ -23,9 +25,10 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [esqueci, setEsqueci] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [saiuPorInatividade] = useState(avisoDeInatividadePendente);
 
   if (session) {
-    const to = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? '/';
+    const to = destinoSeguro((location.state as { from?: { pathname?: unknown } } | null)?.from?.pathname);
     return <Navigate to={to} replace />;
   }
 
@@ -132,6 +135,11 @@ export function LoginPage() {
             <>
           <h1 className="text-xl font-semibold text-slate-800">Entrar</h1>
           <p className="mt-1 text-sm text-slate-500">Entre com o seu e-mail e senha.</p>
+          {saiuPorInatividade && (
+            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Por segurança, a sessão foi encerrada depois de 1 hora sem uso. Entre de novo.
+            </p>
+          )}
 
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div>

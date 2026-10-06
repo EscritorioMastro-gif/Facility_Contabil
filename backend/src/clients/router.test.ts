@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { clientsRouter } from './router.js';
+import { clientsRouter, contemTexto } from './router.js';
 import { errorHandler } from '../middleware/error.js';
 import { makeFakeSupabase, type FakeHandler } from '../test/fakeSupabase.js';
 
@@ -40,7 +40,32 @@ describe('clientsRouter', () => {
     const { app, ops } = appWith(() => ({ data: [], error: null }));
     await request(app).get('/clients?ativo=true&q=acme');
     expect(ops[0]?.filters).toContainEqual(['ativo', true]);
-    expect(ops[0]?.or).toContain('razao_social.ilike.%acme%');
+    expect(ops[0]?.or).toContain('razao_social.ilike."%acme%"');
+  });
+
+  it('GET / busca não deixa o texto digitado virar filtro do banco', async () => {
+    const { app, ops } = appWith(() => ({ data: [], error: null }));
+    // tentativa de fechar o valor e abrir outro filtro (ex.: listar tudo)
+    const ataque = 'x%",id.neq.0,razao_social.ilike."%';
+    await request(app).get(`/clients?q=${encodeURIComponent(ataque)}`);
+    const or = String(ops[0]?.or);
+    expect(or).toBe(`razao_social.ilike.${contemTexto(ataque)},cnpj.ilike.${contemTexto('0')}`);
+    // só as aspas que delimitam os 2 valores ficam "abertas"; as do ataque vêm escapadas
+    let abertas = 0;
+    for (let i = 0; i < or.length; i++) {
+      if (or[i] !== '"') continue;
+      let barras = 0;
+      for (let j = i - 1; j >= 0 && or[j] === '\\'; j--) barras++;
+      if (barras % 2 === 0) abertas++;
+    }
+    expect(abertas).toBe(4);
+  });
+
+  it('contemTexto: aspas, barra e curingas viram texto', () => {
+    expect(contemTexto('acme')).toBe('"%acme%"');
+    expect(contemTexto('50%_off')).toBe('"%50\\\\%\\\\_off%"');
+    expect(contemTexto('a"b')).toBe('"%a\\"b%"');
+    expect(contemTexto('a\\b')).toBe('"%a\\\\\\\\b%"');
   });
 
   it('GET /:id 404 quando não existe', async () => {

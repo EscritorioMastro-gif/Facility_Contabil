@@ -14,7 +14,12 @@ const histOpt = z
   .transform((s) => s || null)
   .nullable();
 
-const matchType = z.enum(['contains', 'starts_with', 'regex', 'exact']);
+// 'regex' não é aceito: uma expressão "catastrófica" (ex.: (a+)+$) trava a API
+// inteira — o Node roda tudo numa thread só — ao classificar cada lançamento.
+// A tela nunca ofereceu esse tipo; "contém"/"começa com"/"exata" cobrem o uso.
+const matchType = z.enum(['contains', 'starts_with', 'exact'], {
+  errorMap: () => ({ message: 'tipo de regra inválido (use contém, começa com ou exata)' }),
+});
 
 const pattern = z
   .string()
@@ -40,17 +45,6 @@ const baseRule = z.object({
   ativo: z.boolean().default(true),
 });
 
-/** regex precisa compilar */
-function regexOk(v: { match_type: string; pattern: string }): boolean {
-  if (v.match_type !== 'regex') return true;
-  try {
-    new RegExp(v.pattern);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** pelo menos um efeito: conta, histórico ou complemento */
 function temEfeito(v: {
   conta_contabil: string | null;
@@ -62,18 +56,12 @@ function temEfeito(v: {
 
 export const ruleCreateSchema = baseRule
   .extend({ client_id: z.string().uuid() })
-  .refine(regexOk, { message: 'expressão regular inválida', path: ['pattern'] })
   .refine(temEfeito, {
     message: 'a regra precisa preencher pelo menos conta contábil, código de histórico ou complemento',
     path: ['conta_contabil'],
   });
 
-export const ruleUpdateSchema = baseRule
-  .partial()
-  .refine((v) => v.match_type !== 'regex' || !v.pattern || regexOk({ match_type: 'regex', pattern: v.pattern }), {
-    message: 'expressão regular inválida',
-    path: ['pattern'],
-  });
+export const ruleUpdateSchema = baseRule.partial();
 
 export const ruleListQuerySchema = z.object({
   client_id: z.string().uuid(),

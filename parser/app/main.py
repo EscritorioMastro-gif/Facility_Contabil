@@ -6,8 +6,9 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-from .config import MAX_UPLOAD_BYTES
+from .config import MAX_UPLOAD_BYTES, PARSER_DOCS
 from .parsers import (
+    ArquivoPesadoError,
     EncryptedFileError,
     EncryptedPdfError,
     NotAStatementError,
@@ -19,12 +20,24 @@ from .parsers import (
 )
 from .parsers.pdf import UnreadablePdfError
 from .schemas import ExcelMapeamento, ParseResult, PlanilhaResult
-from .security import require_shared_secret
+from .security import GuardaDeEntrada, require_shared_secret
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("parser")
 
-app = FastAPI(title="Parser de Extratos", version="0.2.0")
+app = FastAPI(
+    title="Parser de Extratos",
+    version="0.2.0",
+    docs_url="/docs" if PARSER_DOCS else None,
+    redoc_url=None,
+    openapi_url="/openapi.json" if PARSER_DOCS else None,
+)
+# segredo + tamanho conferidos antes de ler qualquer byte do upload
+app.add_middleware(GuardaDeEntrada)
+
+
+def _pesado(exc: ArquivoPesadoError) -> JSONResponse:
+    return JSONResponse(status_code=422, content={"error": str(exc), "code": "too_large"})
 
 
 @app.get("/health")
@@ -59,6 +72,8 @@ async def parse(
         return JSONResponse(status_code=422, content={"error": str(exc), "code": "not_statement"})
     except UnreadablePdfError as exc:
         return JSONResponse(status_code=422, content={"error": str(exc), "code": "unreadable"})
+    except ArquivoPesadoError as exc:
+        return _pesado(exc)
     except Exception as exc:  # noqa: BLE001
         logger.exception("falha ao parsear %s", filename)
         raise HTTPException(status_code=422, detail=f"falha ao ler o extrato: {exc}") from exc
@@ -100,6 +115,8 @@ async def excel_planilha(
         result = ler_planilha(content, aba)
     except (EncryptedFileError, PlanilhaInvalidaError) as exc:
         return _erro_planilha(exc)
+    except ArquivoPesadoError as exc:
+        return _pesado(exc)
     except Exception as exc:  # noqa: BLE001
         logger.exception("falha ao ler planilha %s", filename)
         raise HTTPException(status_code=422, detail=f"falha ao ler a planilha: {exc}") from exc
@@ -129,6 +146,8 @@ async def parse_excel(
         result = parse_planilha(content, mapa)
     except (EncryptedFileError, PlanilhaInvalidaError) as exc:
         return _erro_planilha(exc)
+    except ArquivoPesadoError as exc:
+        return _pesado(exc)
     except Exception as exc:  # noqa: BLE001
         logger.exception("falha ao ler planilha %s", filename)
         raise HTTPException(status_code=422, detail=f"falha ao ler a planilha: {exc}") from exc

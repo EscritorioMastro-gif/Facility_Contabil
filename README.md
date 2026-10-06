@@ -104,6 +104,43 @@ escritório seguem exatamente como antes.
 4. (Opcional) *Authentication → Emails → Templates → Invite user*: texto do
    convite em português.
 
+## Segurança
+
+Auditoria de 2026-10-06. O que o sistema faz sozinho:
+
+- **Isolamento dos dados**: RLS por dono em todas as tabelas e no Storage;
+  login de cliente barrado do banco direto (regras restritivas, `0020`) e
+  atendido só pelas rotas do portal, que conferem a empresa liberada.
+  `_migrations` também fora da API (`0021`).
+- **Login**: token ES256 conferido localmente pela JWKS do Supabase (emissor,
+  público e validade); token inválido nunca vira consulta ao Supabase; IP que
+  erra 30 vezes em 5 min leva 429. Logout por **1 hora sem uso**
+  (`frontend/src/auth/inatividade.ts`). Volta pós-login só para caminho interno.
+- **Abuso**: limite de requisições por IP, de envio de arquivo e de convites
+  por login (`backend/src/middleware/limite.ts`); corpo JSON só lido depois do
+  login (1 MB; 10 MB na revisão); upload até 25 MB; o leitor recusa sem o
+  segredo **antes** de receber o arquivo, PDF acima de 500 páginas e planilha
+  "bomba" (zip que abre gigante).
+- **Cabeçalhos**: CSP na tela (só script do próprio site; só conversa com a API
+  e o Supabase), anti-iframe, `no-store` nas respostas da API, sem
+  `X-Powered-By`; documentação do leitor (`/docs`) fechada.
+- **Log**: sem token de login, sem query string, sem senha de PDF.
+- **Dependências**: revisadas contra o banco de vulnerabilidades (npm audit e
+  OSV); `react-router` v6 tem um aviso moderado (redirecionamento com barra
+  invertida) — mitigado no único ponto que recebe caminho de fora.
+
+O que depende de configuração (fora do código):
+
+1. Rodar `npm run migrate -w backend` (aplica a `0021`).
+2. Supabase → *Authentication → Providers → Email*: senha mínima **10** e exigir
+   letras + números (a tela pede 8, mas quem chama a API direto passaria com 6).
+3. Ativar **verificação em duas etapas** nas contas que administram o sistema:
+   Supabase, Render, GitHub e o Google Workspace do SMTP.
+4. **Backup**: o plano free do Supabase não tem backup — o projeto já foi perdido
+   uma vez. Plano Pro (backup diário) ou uma rotina própria de `pg_dump`.
+5. Repositório do GitHub **privado** (hoje é público: não tem dado de cliente,
+   mas mapeia o sistema para quem quiser atacá-lo).
+
 ## Serviços
 
 | Pasta       | Stack                       | Porta | Papel |
@@ -184,7 +221,7 @@ npm run test -w backend
 cd parser && .venv\Scripts\pytest
 ```
 
-Hoje: **178 testes no backend**, **93 no parser**.
+Hoje: **194 testes no backend**, **100 no parser**.
 
 `backend/src/dominio/exporter.test.ts` tem um **golden test** que compara o
 arquivo gerado com um export real do Domínio (roda se `C:\SEFIP\lancto.txt`

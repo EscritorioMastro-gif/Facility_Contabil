@@ -91,6 +91,24 @@ services:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Cabeçalhos de segurança da tela. CSP: só roda script do próprio site e só
+    # conversa com a API e o Supabase — um script injetado não consegue mandar
+    # os dados (nem o login guardado no navegador) pra outro lugar.
+    # frame-ancestors / X-Frame-Options: ninguém embute o sistema num iframe
+    # (clickjacking). Se mudar o endereço da API, ajuste o connect-src.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://facility-contabil-mastro-api.onrender.com https://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=(), usb=()
     envVars:
       - key: NODE_VERSION
         value: 24.21.0

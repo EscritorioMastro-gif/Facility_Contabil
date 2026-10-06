@@ -9,7 +9,14 @@ function b64url(input: Buffer | string): string {
 
 function token(payload: Record<string, unknown>): string {
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
-  const body = b64url(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600, ...payload }));
+  const body = b64url(
+    JSON.stringify({
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      aud: 'authenticated',
+      iss: `${process.env.SUPABASE_URL}/auth/v1`,
+      ...payload,
+    }),
+  );
   const sig = createHmac('sha256', process.env.SUPABASE_JWT_SECRET!).update(`${header}.${body}`).digest();
   return `Bearer ${header}.${body}.${b64url(sig)}`;
 }

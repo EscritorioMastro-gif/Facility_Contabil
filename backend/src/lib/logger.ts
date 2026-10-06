@@ -7,6 +7,19 @@ const level =
 
 export const logger = pino({
   level,
+  // segunda barreira: se algum objeto logado trouxer cabeçalhos, o token de
+  // login e senhas de PDF nunca vão pro log
+  redact: {
+    paths: [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'headers.authorization',
+      '*.headers.authorization',
+      'pdf_password',
+      '*.pdf_password',
+    ],
+    censor: '[oculto]',
+  },
   transport:
     config.isProd || config.env === 'test'
       ? undefined

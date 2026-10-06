@@ -1,4 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
+import { config } from '../config.js';
 import { HttpError, badRequest, notFound } from './httpError.js';
 import { logger } from './logger.js';
 
@@ -31,7 +32,10 @@ export function mapPgrstError(error: PostgrestError, context = 'operação'): Ht
     });
   }
 
-  return new HttpError(500, `Falha em ${context}`, { code, detail: error.message });
+  // erro inesperado: em produção o detalhe (tabela, coluna, trecho de SQL) fica
+  // só no log do servidor — não vai pra tela de quem chamou
+  logger.error({ code, detail: error.message, context }, 'erro inesperado do banco');
+  return new HttpError(500, `Falha em ${context}`, config.isProd ? { code } : { code, detail: error.message });
 }
 
 /**

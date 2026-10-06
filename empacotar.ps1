@@ -17,6 +17,19 @@ robocopy $src $stage /E /NFL /NDL /NJH /NJS `
   /XD node_modules .venv .git dist build .pytest_cache __pycache__ .vscode .idea `
   /XF *.tsbuildinfo *.log | Out-Null
 
+# Segredos de administrador NÃO viajam no .zip: a secret key do Supabase dá
+# acesso total ao banco (passa por cima de toda regra de acesso) e a
+# SUPABASE_DB_URL tem a senha do Postgres. Na outra máquina, quem precisar
+# delas cola de novo no backend\.env (README, Setup).
+$envBackend = Join-Path $stage 'backend\.env'
+if (Test-Path $envBackend) {
+  $linhas = [System.IO.File]::ReadAllLines($envBackend) | ForEach-Object {
+    if ($_ -match '^\s*(SUPABASE_SERVICE_ROLE_KEY|SUPABASE_DB_URL|SUPABASE_JWT_SECRET)\s*=') { "$($Matches[1])=" } else { $_ }
+  }
+  [System.IO.File]::WriteAllLines($envBackend, [string[]]$linhas, (New-Object System.Text.UTF8Encoding $false))
+  Write-Host "Segredos de administrador retirados do backend\.env da copia."
+}
+
 Write-Host "Compactando..."
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip -Force
 Remove-Item $stage -Recurse -Force

@@ -70,6 +70,24 @@ function formatoPlanilha(filename: string): 'xls' | 'xlsx' | null {
   return null;
 }
 
+const TIPO_POR_EXTENSAO: Record<string, string> = {
+  pdf: 'application/pdf',
+  ofx: 'application/x-ofx',
+  qfx: 'application/x-ofx',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+};
+
+/** Tipo gravado no Storage pela extensão já aceita pelo sistema — nunca o que o
+ *  navegador declarou (dá pra mandar "text/html" com nome de .pdf). */
+export function tipoPorNome(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return TIPO_POR_EXTENSAO[ext] ?? 'application/octet-stream';
+}
+
 export function sanitizeName(name: string): string {
   const parts = name.split('.');
   const ext = parts.length > 1 ? `.${parts.pop()!.toLowerCase()}` : '';
@@ -264,7 +282,7 @@ async function novaImportacao(
   const path = `${userId}/${statementId}/${sanitizeName(file.originalname)}`;
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
-    .upload(path, file.buffer, { contentType: file.mimetype, upsert: true });
+    .upload(path, file.buffer, { contentType: tipoPorNome(file.originalname), upsert: true });
   if (upErr) {
     logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
   } else {
@@ -451,7 +469,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
     const path = `${userId}/${statementId}/${sanitizeName(req.file.originalname)}`;
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+      .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
     if (upErr) {
       logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
     } else {
@@ -535,7 +553,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     const path = `${userId}/${statementId}/${sanitizeName(req.file.originalname)}`;
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
-      .upload(path, req.file.buffer, { contentType: req.file.mimetype, upsert: true });
+      .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
     if (upErr) logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
 
     let parsed: ParseResult | null = null;

@@ -4,6 +4,7 @@ import io
 from datetime import date, datetime
 
 from ..schemas import ParseResult
+from .limites import conferir_xlsx_seguro
 from .tabular import rows_to_result
 
 
@@ -36,7 +37,9 @@ def parse_xlsx(content: bytes) -> ParseResult:
         raise RuntimeError("openpyxl não instalado") from e
 
     # read_only=False: o modo streaming da openpyxl trunca alguns extratos de
-    # banco (confia numa dimensão declarada errada). Planilha de extrato é pequena.
+    # banco (confia numa dimensão declarada errada). Planilha de extrato é pequena
+    # — e a que não é (zip bomb) é barrada antes de ir pra memória.
+    conferir_xlsx_seguro(content)
     wb = load_workbook(io.BytesIO(content), read_only=False, data_only=True, keep_links=False)
     ws = wb.active
     rows = [[_cell_str(c) for c in row] for row in ws.iter_rows(values_only=True)]

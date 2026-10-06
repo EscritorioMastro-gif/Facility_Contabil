@@ -30,8 +30,12 @@ describe('ruleMatches', () => {
     expect(ruleMatches({ match_type: 'contains', pattern: 'energisa' }, 'PAG ENERGISA MT')).toBe(true);
     expect(ruleMatches({ match_type: 'starts_with', pattern: 'PIX ENV' }, 'Pix enviado')).toBe(true);
   });
-  it('regex inválida não quebra', () => {
+  it('regra regex (legado) nunca é executada', () => {
     expect(ruleMatches({ match_type: 'regex', pattern: '[' }, 'x')).toBe(false);
+    // expressão "catastrófica": se fosse executada, travaria o processo
+    const inicio = Date.now();
+    expect(ruleMatches({ match_type: 'regex', pattern: '(a+)+$' }, `${'a'.repeat(40)}!`)).toBe(false);
+    expect(Date.now() - inicio).toBeLessThan(50);
   });
 });
 

@@ -33,6 +33,7 @@ from ..schemas import (
     PlanilhaSugestao,
 )
 from .excel import EncryptedFileError, _is_encrypted_ole2
+from .limites import conferir_xlsx_seguro
 from .tabular import _norm
 
 # A prévia vai até aqui: acima do limite de 10.000 lançamentos por importação,
@@ -85,6 +86,7 @@ def _abrir_xlsx(content: bytes, aba: int | None, estrita: bool):
     from openpyxl import load_workbook
     from openpyxl.utils.datetime import CALENDAR_MAC_1904
 
+    conferir_xlsx_seguro(content)  # zip bomb não chega na openpyxl (ver limites.py)
     try:
         # read_only=False: o modo streaming trunca algumas planilhas (ver excel.py)
         wb = load_workbook(io.BytesIO(content), read_only=False, data_only=True, keep_links=False)

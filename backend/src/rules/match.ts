@@ -33,7 +33,8 @@ export type Rule = {
 /** Chave da memória: descrição normalizada (uppercase, espaços colapsados). */
 export const memoryKey = (s: string) => (s ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
 
-/** A regra manual casa com a descrição? (regex inválida = não casa) */
+/** A regra manual casa com a descrição? Regra 'regex' (legado) nunca casa: a
+ *  expressão não é mais executada (ver rules/schema.ts). */
 export function ruleMatches(rule: Pick<Rule, 'match_type' | 'pattern'>, description: string): boolean {
   const desc = memoryKey(description);
   const pat = memoryKey(rule.pattern);
@@ -45,12 +46,6 @@ export function ruleMatches(rule: Pick<Rule, 'match_type' | 'pattern'>, descript
       return desc.startsWith(pat);
     case 'exact':
       return desc === pat;
-    case 'regex':
-      try {
-        return new RegExp(rule.pattern, 'i').test(description);
-      } catch {
-        return false;
-      }
     default:
       return false;
   }

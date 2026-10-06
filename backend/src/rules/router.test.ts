@@ -73,16 +73,24 @@ describe('rulesRouter', () => {
     expect(res.status).toBe(400);
   });
 
-  it('POST / 400 em regex inválida', async () => {
-    const { app } = appWith(() => ({ data: null, error: null }));
+  it('POST / 400 em regra do tipo regex (não é mais aceito)', async () => {
+    const { app, ops } = appWith(() => ({ data: null, error: null }));
     const res = await request(app).post('/rules').send({
       client_id: CID,
       direction: 'entrada',
       match_type: 'regex',
-      pattern: 'PIX[',
+      pattern: '(a+)+$',
       conta_contabil: '1',
     });
     expect(res.status).toBe(400);
+    expect(ops).toHaveLength(0);
+  });
+
+  it('PATCH /:id 400 ao trocar para regex', async () => {
+    const { app, ops } = appWith(() => ({ data: sample, error: null }));
+    const res = await request(app).patch(`/rules/${CID}`).send({ match_type: 'regex', pattern: '(a+)+$' });
+    expect(res.status).toBe(400);
+    expect(ops).toHaveLength(0);
   });
 
   it('PATCH /:id atualiza só o que veio (não zera os outros campos)', async () => {

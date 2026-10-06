@@ -73,6 +73,13 @@ try {
     process.exit(0);
   }
 
+  // fora do alcance da API do Supabase (chave pública): sem isso qualquer um
+  // marcava uma migration como "já aplicada" (ver 0021_endurecimento_seguranca)
+  await client.query(`
+    alter table public._migrations enable row level security;
+    revoke all on table public._migrations from anon, authenticated;
+  `);
+
   let ran = 0;
   for (const f of files) {
     if (applied.has(f)) {
