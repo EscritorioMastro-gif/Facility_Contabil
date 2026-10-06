@@ -56,10 +56,20 @@ describe('requireAuth (ES256 via JWKS)', () => {
     expect(getUser).not.toHaveBeenCalled();
   });
 
-  it('token forjado (outra chave) é recusado SEM consultar o Supabase', async () => {
+  it('token que a JWKS não confirma vai pro Supabase decidir — forjado continua recusado', async () => {
     const res = await request(app).get('/api/me').set('Authorization', `Bearer ${await token(chaves.outra)}`);
     expect(res.status).toBe(401);
-    expect(getUser).not.toHaveBeenCalled();
+    expect(getUser).toHaveBeenCalledTimes(1);
+  });
+
+  it('JWKS recusa mas o Supabase aceita (visto em produção): o login entra', async () => {
+    getUser.mockResolvedValueOnce({
+      data: { user: { id: 'user-remoto', email: 'r@b.com', app_metadata: {} } },
+      error: null,
+    } as never);
+    const res = await request(app).get('/api/me').set('Authorization', `Bearer ${await token(chaves.outra)}`);
+    expect(res.status).toBe(200);
+    expect(res.body.userId).toBe('user-remoto');
   });
 
   it('token vencido é recusado SEM consultar o Supabase', async () => {

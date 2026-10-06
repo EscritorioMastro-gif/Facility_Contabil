@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { anonClient, userClient } from '../supabase.js';
 import { HttpError, unauthorized } from '../lib/httpError.js';
 import { ipDoCliente } from '../lib/ip.js';
+import { logger } from '../lib/logger.js';
 
 type Papel = 'escritorio' | 'cliente';
 type Identity = { userId: string; email: string | null; papel: Papel };
@@ -33,14 +34,15 @@ function decodeSegment(part: string): Record<string, unknown> {
   return JSON.parse(Buffer.from(b64, 'base64').toString('utf8')) as Record<string, unknown>;
 }
 
-/** Não deu pra CONFERIR o token (JWKS fora do ar / lento) — diferente de token inválido. */
-class JwksIndisponivel extends Error {}
+/** A JWKS não confirmou o token (chaves fora do ar, ou recusa) — quem decide é o Supabase. */
+class JwksNaoConfirmou extends Error {}
 
 /**
- * Verificação assimétrica (ES256/RS256) via JWKS — o padrão deste projeto.
- * Token inválido (assinatura, validade, emissor, kid desconhecido) = null, SEM
- * perguntar pro Supabase: senão qualquer token inventado virava uma chamada
- * de rede (dava pra inundar a API de Auth e derrubar o login de todo mundo).
+ * Verificação assimétrica (ES256/RS256) via JWKS — o caminho rápido, sem rede.
+ * Só token VENCIDO é recusado direto. Qualquer outra recusa vai pro Supabase
+ * conferir (é a palavra final): em produção (2026-10-06) a JWKS chegou a
+ * recusar tokens verdadeiros e o login de todo mundo caiu. Inundação de token
+ * inventado pra cima do Supabase é barrada pelo bloqueio por IP (requireAuth).
  */
 async function verifyJwks(token: string): Promise<Verificado | null> {
   try {
@@ -57,12 +59,18 @@ async function verifyJwks(token: string): Promise<Verificado | null> {
       expiraEm: payload.exp * 1000,
     };
   } catch (err) {
-    if (err instanceof joseErrors.JWKSTimeout || !(err instanceof joseErrors.JOSEError)) {
-      // timeout / falha de rede ao baixar as chaves: não é culpa do token
-      throw new JwksIndisponivel((err as Error).message);
-    }
-    return null;
+    if (err instanceof joseErrors.JWTExpired) return null; // vencido é definitivo
+    const motivo = err instanceof joseErrors.JOSEError ? err.code : (err as Error).message;
+    throw new JwksNaoConfirmou(motivo);
   }
+}
+
+/** Avisa no log (uma vez por processo) que a JWKS recusou um token que o Supabase aceitou. */
+let avisouJwks = false;
+function avisarJwksDivergente(motivo: string): void {
+  if (avisouJwks) return;
+  avisouJwks = true;
+  logger.warn({ motivo }, 'JWKS recusou um token que o Supabase aceitou — conferir chaves/emissor do projeto');
 }
 
 /** Verificação simétrica HS256 (projetos legados, só com SUPABASE_JWT_SECRET). */
@@ -124,13 +132,14 @@ async function resolveIdentity(token: string): Promise<Verificado | null> {
     return verifyRemote(token);
   }
 
-  // ES256 / RS256 / EdDSA -> JWKS; o Supabase só é consultado se as chaves
-  // não puderam ser baixadas (nunca pra token que a JWKS já recusou)
+  // ES256 / RS256 / EdDSA -> JWKS; se ela não confirmar, o Supabase decide
   try {
     return await verifyJwks(token);
   } catch (err) {
-    if (err instanceof JwksIndisponivel) return verifyRemote(token);
-    throw err;
+    if (!(err instanceof JwksNaoConfirmou)) throw err;
+    const remoto = await verifyRemote(token);
+    if (remoto) avisarJwksDivergente(err.message);
+    return remoto;
   }
 }
 
