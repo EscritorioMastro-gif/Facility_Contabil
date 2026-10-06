@@ -1,0 +1,96 @@
+# ==========================================================================
+# Render Blueprint — Facility Contábil no ar (tela + API + leitor de extratos).
+# O banco é o Supabase (nuvem), configurado à parte.
+#
+# Primeiro deploy: Render → New → Blueprint → este repositório. O Render só
+# pede os valores do Supabase (sync: false); o segredo API↔leitor é gerado.
+# Os serviços se acham pelos endereços públicos https://<nome>.onrender.com —
+# se o Render der outro endereço a algum serviço, ajuste PARSER_URL,
+# FRONTEND_ORIGIN e VITE_API_URL abaixo.
+#
+# Plano free: cada serviço dorme após 15 min sem uso e leva ~1 min pra acordar.
+# Pra uso diário, mude `plan` da API e do leitor pra `starter`.
+# ==========================================================================
+
+envVarGroups:
+  - name: facility-contabil-segredo
+    envVars:
+      # segredo compartilhado API ↔ leitor (header X-Parser-Secret)
+      - key: PARSER_SHARED_SECRET
+        generateValue: true
+
+services:
+  # ------------------------------------------------------------------------
+  # Leitor de extratos e gerador de PDF (Python/FastAPI) — parser/
+  # ------------------------------------------------------------------------
+  - type: web
+    name: facility-contabil-mastro-parser
+    runtime: python
+    plan: free
+    region: virginia
+    rootDir: parser
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - fromGroup: facility-contabil-segredo
+
+  # ------------------------------------------------------------------------
+  # API (Node/Express) — backend/ (workspace npm, instalado pela raiz)
+  # ------------------------------------------------------------------------
+  - type: web
+    name: facility-contabil-mastro-api
+    runtime: node
+    plan: free
+    region: virginia
+    # --include=dev: o build (tsc) precisa das devDependencies mesmo com NODE_ENV=production
+    buildCommand: npm ci --include=dev && npm run build -w backend
+    startCommand: node backend/dist/index.js
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      # porta que o Render espera (PORT padrão = 10000)
+      - key: BACKEND_PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      # publishable key (sb_publishable_...)
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: PARSER_URL
+        value: https://facility-contabil-mastro-parser.onrender.com
+      - key: FRONTEND_ORIGIN
+        value: https://facility-contabil-mastro.onrender.com
+      - fromGroup: facility-contabil-segredo
+
+  # ------------------------------------------------------------------------
+  # Tela (React/Vite) — site estático, frontend/
+  # ------------------------------------------------------------------------
+  - type: web
+    name: facility-contabil-mastro
+    runtime: static
+    buildCommand: npm ci --include=dev && npm run build -w frontend
+    staticPublishPath: frontend/dist
+    autoDeployTrigger: commit
+    routes:
+      # SPA: qualquer rota (/clientes, /revisao/:id...) abre o index.html
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: VITE_SUPABASE_URL
+        sync: false
+      # publishable key (sb_publishable_...)
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: VITE_API_URL
+        value: https://facility-contabil-mastro-api.onrender.com

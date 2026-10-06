@@ -281,6 +281,31 @@ módulo Contábil está com o roadmap C1–C11 completo.
 
 `iniciar.bat` sobe os 3 serviços com um clique e abre o navegador sozinho.
 
+## Publicar (Render)
+
+`render.yaml` (Blueprint do Render) descreve os 3 serviços no ar — o banco
+continua sendo o Supabase:
+
+| Serviço | Tipo | Endereço |
+|---|---|---|
+| tela | site estático (`frontend/dist`) | https://facility-contabil-mastro.onrender.com |
+| API | web, Node | https://facility-contabil-mastro-api.onrender.com |
+| leitor de extratos | web, Python | https://facility-contabil-mastro-parser.onrender.com |
+
+1. Render → **New → Blueprint** → este repositório (branch `main`).
+2. O Render pede só os valores do Supabase: `SUPABASE_URL` / `SUPABASE_ANON_KEY`
+   (API) e `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (tela) — a URL do
+   projeto e a *publishable key*. O segredo API↔leitor é gerado pelo Render.
+3. No Supabase: Authentication → desligar o cadastro público (*Allow new users
+   to sign up*) — com o sistema na internet, só entra quem for criado no painel.
+
+Todo `git push` no `main` publica de novo. Plano **free**: cada serviço dorme
+após 15 min sem uso (~1 min pra acordar; a 1ª importação depois disso pode
+precisar de nova tentativa). Pra uso diário, troque `plan: free` por
+`plan: starter` na API e no leitor. Se o Render der outro endereço a algum
+serviço, ajuste `PARSER_URL`, `FRONTEND_ORIGIN` e `VITE_API_URL` no
+`render.yaml`.
+
 ## Rodar em outra máquina
 
 Leva o sistema (com os `.env` já preenchidos) pra outro computador sem repetir
