@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/auth/useAuth';
 import { formatDate } from '@/lib/format';
 import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
@@ -17,6 +18,7 @@ const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string 
 
 export function ClassificacaoHistoricoPage() {
   const { data: clients } = useClients({ ativo: 'all' });
+  const { ehCliente } = useAuth();
   const [clientId, setClientId] = useState('');
   const { data: statements, isLoading, error } = useStatements({
     client_id: clientId || undefined,
@@ -78,9 +80,15 @@ export function ClassificacaoHistoricoPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {shown.map((s: Statement) => {
-                const st = STATUS_LABEL[s.status] ?? { text: s.status, cls: 'bg-slate-100 text-slate-600' };
+                const enviado = ehCliente && (s.status === 'revisao' || s.status === 'gerado');
+                const st = enviado
+                  ? { text: 'enviado à contabilidade', cls: 'bg-green-100 text-green-700' }
+                  : (STATUS_LABEL[s.status] ?? { text: s.status, cls: 'bg-slate-100 text-slate-600' });
                 const totais = 'qtd' in s.totais ? s.totais : null;
-                const destino = s.status === 'classificacao' ? `/classificacao/revisao/${s.id}` : `/revisao/${s.id}`;
+                // login de cliente sempre abre pela Classificação (a Revisão da Importação é do escritório)
+                const destino =
+                  s.status === 'classificacao' || ehCliente ? `/classificacao/revisao/${s.id}` : `/revisao/${s.id}`;
+                const podeExcluir = !ehCliente || s.status === 'classificacao' || s.status === 'erro';
                 return (
                   <tr key={s.id}>
                     <td className="px-4 py-2 font-medium text-slate-800">{s.client?.razao_social ?? '—'}</td>
@@ -103,9 +111,11 @@ export function ClassificacaoHistoricoPage() {
                           {s.status === 'classificacao' ? 'classificar' : 'abrir'}
                         </Link>
                       )}
-                      <button className="ml-3 text-slate-400 hover:text-red-600" onClick={() => setDeleting(s)}>
-                        excluir
-                      </button>
+                      {podeExcluir && (
+                        <button className="ml-3 text-slate-400 hover:text-red-600" onClick={() => setDeleting(s)}>
+                          excluir
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

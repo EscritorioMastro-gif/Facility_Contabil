@@ -13,6 +13,8 @@ import {
   type ClientsFilter,
 } from './api';
 import { ClientForm } from './ClientForm';
+import { AcessosCliente } from './AcessosCliente';
+import { useLiberarAcesso } from './acessos';
 
 export function ClientsPage() {
   const [search, setSearch] = useState('');
@@ -20,6 +22,7 @@ export function ClientsPage() {
   const [editing, setEditing] = useState<Client | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<Client | null>(null);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   const filter = useMemo<ClientsFilter>(() => ({ q: search || undefined, ativo }), [search, ativo]);
   const { data: clients, isLoading, error } = useClients(filter);
@@ -27,9 +30,38 @@ export function ClientsPage() {
   const createMut = useCreateClient();
   const updateMut = useUpdateClient();
   const deleteMut = useDeleteClient();
+  const liberarMut = useLiberarAcesso();
 
-  function handleCreate(input: ClientInput) {
-    createMut.mutate(input, { onSuccess: () => setCreating(false) });
+  function handleCreate(input: ClientInput, emailAcesso: string) {
+    createMut.mutate(input, {
+      onSuccess: ({ client }) => {
+        setCreating(false);
+        if (!emailAcesso) return;
+        // cliente já está salvo; o convite é um passo à parte (se falhar, dá pra repetir na edição)
+        setAviso(null);
+        liberarMut.mutate(
+          { client_id: client.id, email: emailAcesso },
+          {
+            onSuccess: (r) =>
+              setAviso({
+                ok: true,
+                texto: r.convite_enviado
+                  ? `Cliente cadastrado. Convite enviado para ${emailAcesso}.`
+                  : `Cliente cadastrado. ${emailAcesso} já tinha login e agora também acessa esta empresa.`,
+              }),
+            onError: (err) => {
+              setAviso({
+                ok: false,
+                texto: `Cliente cadastrado, mas o acesso não foi liberado: ${
+                  err instanceof ApiError ? err.message : 'falha'
+                }. Tente de novo na edição do cliente.`,
+              });
+              setEditing(client);
+            },
+          },
+        );
+      },
+    });
   }
   function handleUpdate(input: ClientInput) {
     if (!editing) return;
@@ -48,6 +80,22 @@ export function ClientsPage() {
           + Novo cliente
         </button>
       </div>
+
+      {liberarMut.isPending && (
+        <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Enviando o convite de acesso…</p>
+      )}
+      {aviso && (
+        <p
+          className={`flex items-start justify-between gap-3 rounded-md px-3 py-2 text-sm ${
+            aviso.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
+          }`}
+        >
+          <span>{aviso.texto}</span>
+          <button className="text-xs opacity-60 hover:opacity-100" onClick={() => setAviso(null)} aria-label="Fechar aviso">
+            ✕
+          </button>
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -138,13 +186,16 @@ export function ClientsPage() {
         wide
       >
         {editing && (
-          <ClientForm
-            client={editing}
-            onSubmit={handleUpdate}
-            onCancel={() => setEditing(null)}
-            submitting={updateMut.isPending}
-            error={updateMut.error}
-          />
+          <>
+            <ClientForm
+              client={editing}
+              onSubmit={handleUpdate}
+              onCancel={() => setEditing(null)}
+              submitting={updateMut.isPending}
+              error={updateMut.error}
+            />
+            <AcessosCliente clientId={editing.id} />
+          </>
         )}
       </Modal>
 

@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
-import { RequireAuth } from '@/auth/RequireAuth';
+import { RequireAuth, SoEscritorio } from '@/auth/RequireAuth';
 import { LoginPage } from '@/pages/LoginPage';
+import { DefinirSenhaPage } from '@/pages/DefinirSenhaPage';
 import { HubPage } from '@/pages/HubPage';
 import { ClientsPage } from '@/features/clients/ClientsPage';
 import { ImportPage } from '@/features/import/ImportPage';
@@ -18,6 +19,8 @@ export function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* link do e-mail de convite / nova senha — a sessão vem no próprio link */}
+      <Route path="/definir-senha" element={<DefinirSenhaPage />} />
       <Route
         element={
           <RequireAuth>
@@ -26,12 +29,12 @@ export function App() {
         }
       >
         <Route index element={<HubPage />} />
-        <Route path="/clientes" element={<ClientsPage />} />
-        <Route path="/memoria" element={<MemoriaPage />} />
-        <Route path="/importar" element={<ImportPage />} />
-        <Route path="/importar/excel" element={<ExcelImportPage />} />
-        <Route path="/revisao/:id" element={<RevisaoPage />} />
-        <Route path="/historico" element={<HistoricoPage />} />
+        <Route path="/clientes" element={<SoEscritorio><ClientsPage /></SoEscritorio>} />
+        <Route path="/memoria" element={<SoEscritorio><MemoriaPage /></SoEscritorio>} />
+        <Route path="/importar" element={<SoEscritorio><ImportPage /></SoEscritorio>} />
+        <Route path="/importar/excel" element={<SoEscritorio><ExcelImportPage /></SoEscritorio>} />
+        <Route path="/revisao/:id" element={<SoEscritorio><RevisaoPage /></SoEscritorio>} />
+        <Route path="/historico" element={<SoEscritorio><HistoricoPage /></SoEscritorio>} />
         <Route path="/classificacao" element={<ClassificarPage />} />
         <Route path="/classificacao/revisao/:id" element={<ClassificacaoRevisaoPage />} />
         <Route path="/classificacao/historico" element={<ClassificacaoHistoricoPage />} />

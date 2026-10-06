@@ -1,8 +1,8 @@
 import type { ComponentType, SVGProps } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
-import { MODULES, moduleAtPath } from '@/lib/modules';
-import { IconCadastros, IconClassificacao, IconImportacao, IconLogout } from './icons';
+import { MODULES, moduleAtPath, moduloBloqueado } from '@/lib/modules';
+import { IconCadastros, IconCadeado, IconClassificacao, IconImportacao, IconLogout } from './icons';
 
 const MODULE_ICON: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
   cadastros: IconCadastros,
@@ -12,7 +12,7 @@ const MODULE_ICON: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
 
 /** Conteúdo da barra lateral — reaproveitado no fixo (desktop) e na gaveta (mobile). */
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, papel } = useAuth();
   const location = useLocation();
   const activeMod = moduleAtPath(location.pathname);
 
@@ -33,6 +33,23 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         {MODULES.map((m) => {
           const Icon = MODULE_ICON[m.id];
           const isActive = activeMod?.id === m.id;
+
+          // login de cliente: o módulo aparece, mas trancado
+          if (moduloBloqueado(m, papel)) {
+            return (
+              <div
+                key={m.id}
+                aria-disabled="true"
+                title="Bloqueado — área do escritório"
+                className="flex cursor-not-allowed items-center gap-3 rounded-lg border-l-2 border-transparent px-3 py-2.5 text-sm font-medium text-white/30"
+              >
+                {Icon && <Icon className="h-[19px] w-[19px] shrink-0" />}
+                {m.label}
+                <IconCadeado className="ml-auto h-4 w-4 shrink-0" aria-label="bloqueado" />
+              </div>
+            );
+          }
+
           return (
             <div key={m.id}>
               <Link

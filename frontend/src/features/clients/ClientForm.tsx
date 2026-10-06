@@ -13,6 +13,8 @@ type FormValues = {
   saldo_inicial: string;
   ativo: boolean;
   observacoes: string;
+  /** só no cadastro novo: libera o portal (módulo Classificação) pra esse e-mail */
+  email_acesso: string;
 };
 
 function toDefaults(c?: Client): FormValues {
@@ -27,6 +29,7 @@ function toDefaults(c?: Client): FormValues {
     saldo_inicial: c ? String(Number(c.saldo_inicial ?? 0)).replace('.', ',') : '0',
     ativo: c?.ativo ?? true,
     observacoes: c?.observacoes ?? '',
+    email_acesso: '',
   };
 }
 
@@ -38,7 +41,7 @@ export function ClientForm({
   error,
 }: {
   client?: Client;
-  onSubmit: (input: ClientInput) => void;
+  onSubmit: (input: ClientInput, emailAcesso: string) => void;
   onCancel: () => void;
   submitting: boolean;
   error?: unknown;
@@ -61,7 +64,7 @@ export function ClientForm({
       saldo_inicial: v.saldo_inicial.trim() || '0',
       ativo: v.ativo,
       observacoes: v.observacoes.trim() || null,
-    });
+    }, v.email_acesso.trim());
   });
 
   const apiMsg =
@@ -150,6 +153,23 @@ export function ClientForm({
         <label className="label">Observações</label>
         <textarea className="input" rows={2} {...register('observacoes')} />
       </div>
+
+      {!client && (
+        <div>
+          <label className="label">E-mail de acesso do cliente (opcional)</label>
+          <input
+            className="input"
+            type="email"
+            placeholder="cliente@empresa.com.br"
+            {...register('email_acesso', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ })}
+          />
+          {errors.email_acesso && <p className="mt-1 text-xs text-red-600">e-mail inválido</p>}
+          <p className="mt-1 text-xs text-slate-400">
+            Se preencher, o cliente recebe um convite por e-mail para criar a senha e passa a ver só o
+            módulo Classificação desta empresa. Pode deixar em branco e liberar depois, na edição.
+          </p>
+        </div>
+      )}
 
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input type="checkbox" {...register('ativo')} />

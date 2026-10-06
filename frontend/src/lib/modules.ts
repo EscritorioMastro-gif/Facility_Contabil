@@ -1,3 +1,5 @@
+import type { Papel } from '@/auth/authContext';
+
 /** Módulos do sistema — usado pelo hub (seleção) e pelo layout (nav contextual). */
 export type ModuleDef = {
   id: string;
@@ -6,6 +8,8 @@ export type ModuleDef = {
   home: string;
   match: (pathname: string) => boolean;
   nav: { to: string; label: string }[];
+  /** só o escritório usa — login de cliente vê com cadeado */
+  soEscritorio?: boolean;
 };
 
 export const MODULES: ModuleDef[] = [
@@ -16,6 +20,7 @@ export const MODULES: ModuleDef[] = [
     home: '/clientes',
     match: (p) => p.startsWith('/clientes'),
     nav: [{ to: '/clientes', label: 'Clientes' }],
+    soEscritorio: true,
   },
   {
     id: 'importacao',
@@ -29,6 +34,7 @@ export const MODULES: ModuleDef[] = [
       { to: '/historico', label: 'Histórico' },
       { to: '/memoria', label: 'Memória' },
     ],
+    soEscritorio: true,
   },
   {
     id: 'classificacao',
@@ -46,4 +52,9 @@ export const MODULES: ModuleDef[] = [
 
 export function moduleAtPath(pathname: string): ModuleDef | undefined {
   return MODULES.find((m) => m.match(pathname));
+}
+
+/** O módulo aparece com cadeado pra esse login? */
+export function moduloBloqueado(m: ModuleDef, papel: Papel): boolean {
+  return papel === 'cliente' && !!m.soEscritorio;
 }

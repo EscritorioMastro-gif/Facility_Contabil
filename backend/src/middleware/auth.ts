@@ -5,7 +5,8 @@ import { config } from '../config.js';
 import { anonClient, userClient } from '../supabase.js';
 import { unauthorized } from '../lib/httpError.js';
 
-type Identity = { userId: string; email: string | null };
+type Papel = 'escritorio' | 'cliente';
+type Identity = { userId: string; email: string | null; papel: Papel };
 type CacheEntry = Identity & { exp: number };
 
 const tokenCache = new Map<string, CacheEntry>();
@@ -13,6 +14,13 @@ const CACHE_TTL_MS = 60_000;
 
 const jwks = createRemoteJWKSet(new URL(config.supabase.jwksUrl));
 const expectedIssuer = `${config.supabase.url}/auth/v1`;
+
+/** Login de cliente (portal) = app_metadata.papel 'cliente' — só o backend, com a
+ *  secret key, consegue gravar app_metadata. Qualquer outro login é do escritório. */
+function papelDe(appMetadata: unknown): Papel {
+  const papel = (appMetadata as { papel?: unknown } | null | undefined)?.papel;
+  return papel === 'cliente' ? 'cliente' : 'escritorio';
+}
 
 function decodeSegment(part: string): Record<string, unknown> {
   const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
@@ -28,7 +36,11 @@ async function verifyJwks(token: string): Promise<Identity | null> {
       audience: 'authenticated',
     });
     if (typeof payload.sub !== 'string') return null;
-    return { userId: payload.sub, email: typeof payload.email === 'string' ? payload.email : null };
+    return {
+      userId: payload.sub,
+      email: typeof payload.email === 'string' ? payload.email : null,
+      papel: papelDe(payload.app_metadata),
+    };
   } catch {
     return null;
   }
@@ -55,14 +67,18 @@ function verifyHs256(token: string): Identity | null {
   const now = Math.floor(Date.now() / 1000);
   if (typeof claims.exp === 'number' && claims.exp < now) return null;
   if (typeof claims.sub !== 'string' || claims.sub === '') return null;
-  return { userId: claims.sub, email: typeof claims.email === 'string' ? claims.email : null };
+  return {
+    userId: claims.sub,
+    email: typeof claims.email === 'string' ? claims.email : null,
+    papel: papelDe(claims.app_metadata),
+  };
 }
 
 /** Último recurso: pergunta pra API de Auth do Supabase (a anon key basta). */
 async function verifyRemote(token: string): Promise<Identity | null> {
   const { data, error } = await anonClient.auth.getUser(token);
   if (error || !data.user) return null;
-  return { userId: data.user.id, email: data.user.email ?? null };
+  return { userId: data.user.id, email: data.user.email ?? null, papel: papelDe(data.user.app_metadata) };
 }
 
 async function resolveIdentity(token: string): Promise<Identity | null> {
@@ -91,7 +107,9 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     const cached = tokenCache.get(token);
     let identity: Identity | null =
-      cached && cached.exp > Date.now() ? { userId: cached.userId, email: cached.email } : null;
+      cached && cached.exp > Date.now()
+        ? { userId: cached.userId, email: cached.email, papel: cached.papel }
+        : null;
 
     if (!identity) {
       identity = await resolveIdentity(token);

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ApiError } from '@/lib/api';
+import { useAuth } from '@/auth/useAuth';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Direction, Transaction } from '@/lib/types';
 import { useStatement } from '@/features/statements/api';
@@ -21,6 +22,7 @@ export function ClassificacaoRevisaoPage() {
   const [confirmSair, setConfirmSair] = useState(false);
   const [bulkDir, setBulkDir] = useState<Direction>('saida');
   const [bulkClassif, setBulkClassif] = useState('');
+  const { ehCliente } = useAuth();
 
   const clientId = data?.statement.client_id ?? '';
   const transactions = useMemo(() => data?.transactions ?? [], [data]);
@@ -73,6 +75,8 @@ export function ClassificacaoRevisaoPage() {
 
   const st = data.statement;
   const jaPuxado = st.status !== 'classificacao';
+  // login de cliente: depois que o escritório puxou o extrato, só consulta
+  const somenteLeitura = ehCliente && jaPuxado;
 
   function onSave() {
     if (!isDirty) return;
@@ -101,7 +105,7 @@ export function ClassificacaoRevisaoPage() {
           >
             Voltar
           </button>
-          <button className="btn-primary" onClick={onSave} disabled={!isDirty || save.isPending}>
+          <button className="btn-primary" onClick={onSave} disabled={somenteLeitura || !isDirty || save.isPending}>
             {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
           </button>
         </div>
@@ -109,8 +113,14 @@ export function ClassificacaoRevisaoPage() {
 
       {jaPuxado && (
         <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
-          Este extrato já foi puxado pro módulo Importação (status atual: {st.status}). Você ainda
-          pode ajustar as classificações aqui — elas seguem valendo pro arquivo do Domínio.
+          {somenteLeitura ? (
+            'Este extrato já foi enviado para a contabilidade — as classificações ficam só para consulta.'
+          ) : (
+            <>
+              Este extrato já foi puxado pro módulo Importação (status atual: {st.status}). Você ainda
+              pode ajustar as classificações aqui — elas seguem valendo pro arquivo do Domínio.
+            </>
+          )}
         </p>
       )}
 
@@ -119,7 +129,7 @@ export function ClassificacaoRevisaoPage() {
       )}
       {saveErr && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{saveErr}</p>}
 
-      <StatementSummary statement={st} />
+      <StatementSummary statement={st} resumido={ehCliente} />
 
       <div className="card grid grid-cols-3 gap-x-6 gap-y-1 p-3 text-sm">
         <Stat label="Ativos" value={String(stats.ativos)} />
@@ -127,6 +137,7 @@ export function ClassificacaoRevisaoPage() {
         <Stat label="Pendentes" value={String(stats.pend)} tone={stats.pend ? 'amber' : undefined} />
       </div>
 
+      {!somenteLeitura && (
       <div className="card flex flex-wrap items-end gap-2 p-4 text-sm">
         <p className="mb-1 w-full text-sm font-medium text-slate-700">Classificar em massa</p>
         <label className="flex flex-col">
@@ -162,6 +173,7 @@ export function ClassificacaoRevisaoPage() {
           aplicar
         </button>
       </div>
+      )}
 
       <div className="flex flex-wrap gap-1 text-sm">
         {(
@@ -221,7 +233,8 @@ export function ClassificacaoRevisaoPage() {
                     options={catalogo[txn.direction]}
                     value={get(txn.id)}
                     onChange={(v) => patchRow(txn.id, v)}
-                    className="input h-8 w-56 px-2 py-1 text-xs"
+                    disabled={somenteLeitura}
+                    className="input h-8 w-56 px-2 py-1 text-xs disabled:bg-slate-100"
                   />
                 </td>
               </tr>
@@ -236,7 +249,9 @@ export function ClassificacaoRevisaoPage() {
       <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-sm">
         <span className="text-slate-500">
           {isDirty
-            ? 'Salve as alterações antes de ir pra Importação.'
+            ? ehCliente
+              ? 'Salve as alterações.'
+              : 'Salve as alterações antes de ir pra Importação.'
             : stats.pend > 0
               ? `${stats.pend} lançamento(s) ainda sem classificação.`
               : `Tudo classificado (${stats.classificados}/${stats.ativos}).`}
@@ -247,14 +262,17 @@ export function ClassificacaoRevisaoPage() {
               Descartar alterações
             </button>
           )}
-          <button
-            className="btn-primary"
-            disabled={isDirty}
-            title={isDirty ? 'Salve as alterações primeiro' : 'Ir definir as contas contábeis'}
-            onClick={() => navigate(`/importar?puxar=${st.id}`)}
-          >
-            {jaPuxado ? 'Ir para Importação →' : 'Puxar para Importação →'}
-          </button>
+          {/* puxar pra Importação é do escritório */}
+          {!ehCliente && (
+            <button
+              className="btn-primary"
+              disabled={isDirty}
+              title={isDirty ? 'Salve as alterações primeiro' : 'Ir definir as contas contábeis'}
+              onClick={() => navigate(`/importar?puxar=${st.id}`)}
+            >
+              {jaPuxado ? 'Ir para Importação →' : 'Puxar para Importação →'}
+            </button>
+          )}
         </div>
       </div>
 

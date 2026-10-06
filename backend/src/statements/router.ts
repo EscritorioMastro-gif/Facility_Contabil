@@ -57,7 +57,7 @@ const EXT_TO_FORMAT: Record<string, string> = {
   xlsx: 'xlsx',
 };
 
-function detectFormat(filename: string): string | null {
+export function detectFormat(filename: string): string | null {
   const ext = filename.split('.').pop()?.toLowerCase() ?? '';
   return EXT_TO_FORMAT[ext] ?? null;
 }
@@ -70,7 +70,7 @@ function formatoPlanilha(filename: string): 'xls' | 'xlsx' | null {
   return null;
 }
 
-function sanitizeName(name: string): string {
+export function sanitizeName(name: string): string {
   const parts = name.split('.');
   const ext = parts.length > 1 ? `.${parts.pop()!.toLowerCase()}` : '';
   const base = parts
@@ -84,7 +84,7 @@ function sanitizeName(name: string): string {
 }
 
 /** Por que o resultado do parser não pode ser gravado — null quando pode. */
-function motivoRecusa(parseErr: unknown, parsed: ParseResult | null): string | null {
+export function motivoRecusa(parseErr: unknown, parsed: ParseResult | null): string | null {
   if (parseErr) return parseErr instanceof Error ? parseErr.message : 'falha ao ler o extrato';
   if (!parsed?.transactions.length) return parsed?.warnings[0] ?? 'Nenhum lançamento encontrado no extrato';
   if (parsed.transactions.length > LIMITE_LINHAS) {
@@ -112,7 +112,7 @@ function buildTotais(txns: ParseResult['transactions']) {
  * e finaliza o `statement` (período, totais, saldo_final, status final dado).
  * Usado pela importação nova, pela reimportação e pelo módulo Classificação.
  */
-async function gravarLancamentos(
+export async function gravarLancamentos(
   supabase: SupabaseClient,
   p: {
     ownerId: string;

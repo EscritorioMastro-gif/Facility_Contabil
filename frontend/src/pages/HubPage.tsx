@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
-import { MODULES } from '@/lib/modules';
+import { useAuth } from '@/auth/useAuth';
+import { MODULES, moduloBloqueado } from '@/lib/modules';
 import { FinanceIllustration } from '@/components/FinanceIllustration';
+import { IconCadeado } from '@/components/icons';
 
 function saudacao(d = new Date()) {
   const h = d.getHours();
@@ -10,6 +12,8 @@ function saudacao(d = new Date()) {
 }
 
 export function HubPage() {
+  const { papel } = useAuth();
+
   return (
     <section className="flex min-h-[calc(100vh-8rem)] flex-col justify-center gap-10 lg:flex-row lg:items-center lg:gap-8">
       <div className="max-w-md shrink-0">
@@ -26,16 +30,28 @@ export function HubPage() {
         </p>
 
         <div className="mt-4 flex flex-col gap-2">
-          {MODULES.map((m) => (
-            <Link
-              key={m.id}
-              to={m.home}
-              className="group flex items-center justify-between rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm transition-colors hover:border-brand-300 hover:bg-brand-50"
-            >
-              <span className="font-medium text-slate-800">{m.label}</span>
-              <span className="text-brand-500 transition-transform group-hover:translate-x-0.5">→</span>
-            </Link>
-          ))}
+          {MODULES.map((m) =>
+            moduloBloqueado(m, papel) ? (
+              <div
+                key={m.id}
+                aria-disabled="true"
+                title="Bloqueado — área do escritório"
+                className="flex cursor-not-allowed items-center justify-between rounded-xl border border-brand-200 bg-white/60 px-4 py-3 text-sm text-slate-400"
+              >
+                <span className="font-medium">{m.label}</span>
+                <IconCadeado className="h-4 w-4" aria-label="bloqueado" />
+              </div>
+            ) : (
+              <Link
+                key={m.id}
+                to={m.home}
+                className="group flex items-center justify-between rounded-xl border border-brand-200 bg-white px-4 py-3 text-sm transition-colors hover:border-brand-300 hover:bg-brand-50"
+              >
+                <span className="font-medium text-slate-800">{m.label}</span>
+                <span className="text-brand-500 transition-transform group-hover:translate-x-0.5">→</span>
+              </Link>
+            ),
+          )}
         </div>
       </div>
 

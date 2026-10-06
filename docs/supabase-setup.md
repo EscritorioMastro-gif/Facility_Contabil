@@ -60,3 +60,9 @@ No **Table Editor** devem existir: `clients`, `chart_accounts`, `mapping_rules`,
 e `exports` (privados).
 
 Rode `GET http://localhost:8080/api/health/deep` — `supabase` deve vir `ok: true`.
+
+## 6. Acesso do cliente (opcional)
+
+Pra liberar login de cliente (só o módulo Classificação, convite por e-mail):
+*secret key* no backend, **SMTP próprio** e *URL Configuration* — o passo a
+passo está no README, seção **Acesso do cliente**.

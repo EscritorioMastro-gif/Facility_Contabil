@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { AuthCtx, type AuthState } from './authContext';
+import { AuthCtx, type AuthState, type Papel } from './authContext';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -18,11 +18,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const value = useMemo<AuthState>(
-    () => ({
+  const value = useMemo<AuthState>(() => {
+    const user = session?.user ?? null;
+    // app_metadata só o backend grava (com a secret key) — o login não consegue se promover
+    const papel: Papel = user?.app_metadata?.papel === 'cliente' ? 'cliente' : 'escritorio';
+    return {
       session,
-      user: session?.user ?? null,
+      user,
       loading,
+      papel,
+      ehCliente: papel === 'cliente',
+      precisaDefinirSenha: papel === 'cliente' && user?.user_metadata?.senha_definida !== true,
       async signIn(email, password) {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -30,9 +36,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       async signOut() {
         await supabase.auth.signOut();
       },
-    }),
-    [session, loading],
-  );
+    };
+  }, [session, loading]);
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

@@ -58,7 +58,8 @@ export function ClassificarPage() {
             <option value="">{loadingClients ? 'Carregando…' : 'Selecione…'}</option>
             {clients?.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.razao_social} — Domínio {c.dominio_code}
+                {c.razao_social}
+                {c.dominio_code ? ` — Domínio ${c.dominio_code}` : ''}
               </option>
             ))}
           </select>

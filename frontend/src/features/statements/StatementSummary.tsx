@@ -5,7 +5,14 @@ function hasTotais(t: Statement['totais']): t is StatementTotais {
   return typeof (t as StatementTotais)?.qtd === 'number';
 }
 
-export function StatementSummary({ statement }: { statement: Statement }) {
+export function StatementSummary({
+  statement,
+  resumido = false,
+}: {
+  statement: Statement;
+  /** sem conta do banco e lote do Domínio (portal do cliente) */
+  resumido?: boolean;
+}) {
   const t = statement.totais;
   const periodo =
     statement.period_start && statement.period_end
@@ -16,8 +23,12 @@ export function StatementSummary({ statement }: { statement: Statement }) {
     <div className="card grid grid-cols-2 gap-x-8 gap-y-2 p-4 text-sm sm:grid-cols-4">
       <Info label="Arquivo" value={`${statement.arquivo_nome} (${statement.formato.toUpperCase()})`} />
       <Info label="Período" value={periodo} />
-      <Info label="Conta do banco" value={statement.banco_conta_contabil ?? '—'} />
-      <Info label="Lote Domínio" value={String(statement.lote_numero)} />
+      {!resumido && (
+        <>
+          <Info label="Conta do banco" value={statement.banco_conta_contabil ?? '—'} />
+          <Info label="Lote Domínio" value={String(statement.lote_numero)} />
+        </>
+      )}
       {hasTotais(t) && (
         <>
           <Info label="Lançamentos" value={String(t.qtd)} />

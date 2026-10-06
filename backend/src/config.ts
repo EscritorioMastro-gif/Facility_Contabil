@@ -13,6 +13,8 @@ function optional(name: string, fallback = ''): string {
   return v && v.trim() !== '' ? v : fallback;
 }
 
+const semBarraFinal = (url: string) => url.trim().replace(/\/+$/, '');
+
 const supabaseUrl = required('SUPABASE_URL').replace(/\/$/, '');
 
 export const config = {
@@ -40,6 +42,10 @@ export const config = {
   },
 
   frontendOrigin: optional('FRONTEND_ORIGIN', 'http://localhost:5173'),
+
+  /** Endereço da tela publicada — o link do convite/redefinição de senha que o
+   *  cliente recebe por e-mail leva pra cá (nunca pro localhost). */
+  appUrl: semBarraFinal(optional('APP_URL', optional('FRONTEND_ORIGIN', 'http://localhost:5173').split(',')[0]!)),
 } as const;
 
 export type Config = typeof config;

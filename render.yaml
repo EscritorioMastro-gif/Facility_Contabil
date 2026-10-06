@@ -68,6 +68,13 @@ services:
         value: https://facility-contabil-mastro-parser.onrender.com
       - key: FRONTEND_ORIGIN
         value: https://facility-contabil-mastro.onrender.com
+      # link do convite / nova senha que o cliente recebe por e-mail
+      - key: APP_URL
+        value: https://facility-contabil-mastro.onrender.com
+      # secret key do Supabase (sb_secret_...) — acesso do cliente e convites.
+      # Em serviço já criado, o Render NÃO pede: cadastrar no painel (Environment).
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
       - fromGroup: facility-contabil-segredo
 
   # ------------------------------------------------------------------------

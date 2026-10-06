@@ -15,6 +15,10 @@ Depois do login cai num **hub** com três módulos:
   contabilidade; serve pra quem quer separar "o que aconteceu no extrato" de
   "qual conta contábil isso vira".
 
+O **cliente do escritório** também pode ter login próprio (opcional, liberado no
+cadastro dele): entra só no módulo **Classificação** das empresas liberadas pra
+ele — ver [Acesso do cliente](#acesso-do-cliente).
+
 ## Fluxo — Importação
 
 1. **Escolhe o cliente** e **sobe o extrato do mês** (PDF/OFX/CSV/XLS/XLSX) — ou
@@ -57,6 +61,48 @@ Depois do login cai num **hub** com três módulos:
 3. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
    códigos de histórico e o lote, e o mesmo registro segue pro fluxo normal de
    Revisão/exportação (sem duplicar o extrato).
+
+## Acesso do cliente
+
+Opcional, por empresa. No **Cadastro** do cliente: campo **E-mail de acesso do
+cliente** (no cadastro novo) e bloco **Acesso do cliente ao sistema** (na
+edição) — liberar outro e-mail, reenviar o convite, mandar link de nova senha,
+remover.
+
+- O cliente recebe um **convite por e-mail** e **cria a própria senha** pelo
+  link (`/definir-senha`). O escritório nunca vê a senha — o Supabase Auth
+  guarda só o hash. Esqueceu? **Esqueci minha senha** na tela de entrada.
+- O login é o **e-mail** do cliente. O mesmo e-mail pode ser liberado em
+  **várias empresas** (mesmo login, escolhe a empresa dentro do módulo).
+- Ele vê **só o módulo Classificação**: enviar extrato, classificar, criar
+  categorias, histórico. **Cadastros** e **Importação** aparecem com cadeado.
+- Depois que o escritório **puxa** o extrato pra Importação, ele fica **só pra
+  consulta** pro cliente (e ele não pode mais excluí-lo).
+- Nada da parte contábil aparece pro cliente (código no Domínio, conta do
+  banco, lote, códigos de histórico).
+
+Por dentro: o login do cliente leva `app_metadata.papel = 'cliente'` (só a
+*secret key* grava isso). A API manda esse login pras rotas do portal
+(`backend/src/portal/`), que conferem a empresa em `cliente_acessos` antes de
+qualquer leitura/gravação; políticas RLS **restritivas** (migration `0020`)
+barram qualquer acesso direto dele ao banco e ao Storage. Os logins do
+escritório seguem exatamente como antes.
+
+**Pra funcionar precisa de:**
+
+1. **Secret key** do Supabase (*Project Settings → API Keys → Secret keys*,
+   `sb_secret_...`) em `SUPABASE_SERVICE_ROLE_KEY` — no `backend/.env` e no
+   Render (serviço da API → *Environment*). Sem ela, liberar acesso responde
+   "Acesso de clientes indisponível".
+2. **SMTP próprio** no Supabase (*Authentication → Emails → SMTP Settings*). O
+   envio padrão do Supabase só entrega pra quem é da equipe do projeto, no
+   máximo 2 e-mails por hora — sem SMTP o convite não chega no cliente.
+3. *Authentication → URL Configuration*: **Site URL**
+   `https://facility-contabil-mastro.onrender.com`; em **Redirect URLs**,
+   `https://facility-contabil-mastro.onrender.com/**` e
+   `http://localhost:5173/**`.
+4. (Opcional) *Authentication → Emails → Templates → Invite user*: texto do
+   convite em português.
 
 ## Serviços
 
@@ -138,7 +184,7 @@ npm run test -w backend
 cd parser && .venv\Scripts\pytest
 ```
 
-Hoje: **147 testes no backend**, **93 no parser**.
+Hoje: **178 testes no backend**, **93 no parser**.
 
 `backend/src/dominio/exporter.test.ts` tem um **golden test** que compara o
 arquivo gerado com um export real do Domínio (roda se `C:\SEFIP\lancto.txt`
@@ -197,6 +243,10 @@ fazia fica em [`docs/roadmap.md`](docs/roadmap.md).
 **Milestone 8 (deploy)** — no ar pelo Render desde 2026-10-06; ver
 [Publicar (Render)](#publicar-render).
 
+**Acesso do cliente** (2026-10-06) — login do cliente por e-mail, com convite
+e senha criada por ele, só no módulo Classificação, uma ou várias empresas por
+login (migration `0020`); ver [Acesso do cliente](#acesso-do-cliente).
+
 ## Uso no dia a dia
 
 `iniciar.bat` sobe os 3 serviços com um clique e abre o navegador sozinho.
@@ -214,10 +264,14 @@ continua sendo o Supabase:
 
 1. Render → **New → Blueprint** → este repositório (branch `main`).
 2. O Render pede só os valores do Supabase: `SUPABASE_URL` / `SUPABASE_ANON_KEY`
-   (API) e `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (tela) — a URL do
-   projeto e a *publishable key*. O segredo API↔leitor é gerado pelo Render.
+   / `SUPABASE_SERVICE_ROLE_KEY` (API) e `VITE_SUPABASE_URL` /
+   `VITE_SUPABASE_ANON_KEY` (tela) — a URL do projeto, a *publishable key* e a
+   *secret key*. O segredo API↔leitor é gerado pelo Render. Em serviço que já
+   existe, o Render **não** pede variável nova do `render.yaml` com
+   `sync: false` — cadastrar na mão em *Environment*.
 3. No Supabase: Authentication → desligar o cadastro público (*Allow new users
-   to sign up*) — com o sistema na internet, só entra quem for criado no painel.
+   to sign up*) — com o sistema na internet, só entra quem for criado no painel
+   (ou convidado pelo escritório — ver [Acesso do cliente](#acesso-do-cliente)).
 
 Todo `git push` no `main` publica de novo. Plano **free**: cada serviço dorme
 após 15 min sem uso (~1 min pra acordar; a 1ª importação depois disso pode
