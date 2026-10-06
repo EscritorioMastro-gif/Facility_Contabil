@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 from ..schemas import FileFormat, ParseResult
-from .balancete import parse_balancete_pdf
 from .detect import detect_format
 from .excel import EncryptedFileError, parse_xls, parse_xlsx
 from .ofx import parse_ofx
 from .pdf import EncryptedPdfError, UnreadablePdfError, parse_pdf
 from .planilha import PlanilhaInvalidaError, ler_planilha, parse_planilha
-from .plano_contas import parse_plano_contas_pdf
 from .tabular import NotAStatementError, parse_csv
 
 __all__ = [
     "detect_format",
     "parse_statement",
-    "parse_plano_contas_pdf",
-    "parse_balancete_pdf",
     "ler_planilha",
     "parse_planilha",
     "PlanilhaInvalidaError",

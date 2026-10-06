@@ -21,7 +21,7 @@ envVarGroups:
 
 services:
   # ------------------------------------------------------------------------
-  # Leitor de extratos e gerador de PDF (Python/FastAPI) — parser/
+  # Leitor de extratos (Python/FastAPI) — parser/
   # ------------------------------------------------------------------------
   - type: web
     name: facility-contabil-mastro-parser

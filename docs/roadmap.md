@@ -9,9 +9,14 @@
 | 5 | Regras / memória por cliente | ✅ feito |
 | 6 | Exportador Domínio + teste golden + download | ✅ feito (golden byte-a-byte, importou no Domínio real) |
 | 7 | Reimportar + histórico + polimento | ✅ feito |
-| 8 | Deploy + docs de operação | ⏳ próximo |
+| 8 | Deploy + docs de operação | ✅ no ar (Render, 2026-10-06) |
 
 ## Módulo Contábil (C1-C11)
+
+> **Retirado do sistema em 2026-10-06** (pedido do escritório): tela, API,
+> leitores de plano de contas/balancete e relatórios em PDF saíram do código, e
+> a migration `0019` apaga as tabelas (só se estiverem vazias). O registro
+> abaixo fica só como histórico.
 
 Escrituração contábil em partida dobrada por dentro do próprio sistema —
 roadmap e numeração próprios ("C" de Contábil), independentes do M1-M8 acima
