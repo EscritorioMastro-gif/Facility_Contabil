@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapPgrstError } from '../lib/pgrst.js';
+import { escritorioDe } from '../lib/escritorio.js';
 import { badRequest, notFound } from '../lib/httpError.js';
 import {
   classificacaoCreateSchema,
@@ -42,7 +43,7 @@ classificacoesRouter.post('/', async (req, res, next) => {
     const dto = classificacaoCreateSchema.parse(req.body);
     const { data, error } = await db(req)
       .from(TABLE)
-      .insert({ ...dto, owner_id: req.auth!.userId })
+      .insert({ ...dto, owner_id: escritorioDe(req) })
       .select(COLUMNS)
       .single();
     if (error) {

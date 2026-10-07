@@ -100,6 +100,7 @@ function montar(opts: {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.auth = { userId: ESCRITORIO, email: 'x@escritorio.com', token: 't' };
+    req.escritorioId = ESCRITORIO;
     req.supabase = escritorio.client;
     req.supabaseAdmin = admin as unknown as SupabaseClient;
     next();

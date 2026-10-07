@@ -9,12 +9,13 @@
  * acesso de um login apaga o login.
  */
 import { Router } from 'express';
-import type { SupabaseClient, User } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { config } from '../config.js';
 import { adminDe } from '../lib/admin.js';
+import { erroDeEmail, linkSenha, senhaDefinida } from '../lib/convite.js';
 import { badGateway, badRequest, HttpError, notFound } from '../lib/httpError.js';
 import { mapPgrstError } from '../lib/pgrst.js';
+import { escritorioDe } from '../lib/escritorio.js';
 import { logger } from '../lib/logger.js';
 
 const TABLE = 'cliente_acessos';
@@ -33,27 +34,12 @@ function db(req: { supabase?: SupabaseClient }): SupabaseClient {
   return req.supabase;
 }
 
-/** Link do e-mail (convite ou redefinição) — sempre a tela publicada. */
-const linkSenha = () => `${config.appUrl}/definir-senha`;
-
 /** O cliente é do escritório (RLS) — senão 404. */
 async function exigirCliente(supabase: SupabaseClient, clientId: string) {
   const { data, error } = await supabase.from('clients').select('id').eq('id', clientId).maybeSingle();
   if (error) throw mapPgrstError(error, 'buscar o cliente');
   if (!data) throw notFound('Cliente não encontrado');
 }
-
-function erroDeEmail(acao: string, err: { message?: string; code?: string; status?: number }): HttpError {
-  const msg = err.message ?? 'erro desconhecido';
-  if (err.status === 429 || /rate limit/i.test(msg)) {
-    return new HttpError(429, `O Supabase limitou o envio de e-mails agora — tente de novo em alguns minutos (${msg}).`);
-  }
-  return badGateway(
-    `Não consegui ${acao}: ${msg}. Confira o servidor de e-mail (SMTP) em Supabase → Authentication → Emails.`,
-  );
-}
-
-const senhaDefinida = (u: User | null | undefined) => u?.user_metadata?.senha_definida === true;
 
 // --------------------------------------------------------------------------- #
 // GET /?client_id=  — logins com acesso a esse cliente (e as outras empresas deles)
@@ -157,7 +143,7 @@ acessosRouter.post('/', async (req, res, next) => {
 
     const { data: acesso, error: aErr } = await supabase
       .from(TABLE)
-      .insert({ owner_id: req.auth!.userId, client_id, user_id: userId, email })
+      .insert({ owner_id: escritorioDe(req), client_id, user_id: userId, email })
       .select(COLS)
       .single();
     if (aErr) {

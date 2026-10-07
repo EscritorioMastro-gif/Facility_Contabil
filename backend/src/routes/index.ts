@@ -11,6 +11,8 @@ import { acessosRouter } from '../acessos/router.js';
 import { portalClientesRouter } from '../portal/clientes.js';
 import { portalExtratosRouter } from '../portal/extratos.js';
 import { portalClassificacoesRouter } from '../portal/classificacoes.js';
+import { equipeRouter } from '../equipe/router.js';
+import { exigirEscritorio } from '../lib/escritorio.js';
 import { porPapel, soEscritorio } from './papel.js';
 
 export const apiRouter = Router();
@@ -29,24 +31,32 @@ function soEmUpload(limite: RequestHandler): RequestHandler {
 }
 const soEmPost = (limite: RequestHandler): RequestHandler => (req, res, next) =>
   req.method === 'POST' ? limite(req, res, next) : next();
+/** Rotas do escritório: antes, descobre o escritório do login (lib/escritorio.ts). */
+const doEscritorio = (router: RequestHandler): RequestHandler => Router().use(exigirEscritorio, router);
 
 apiRouter.use('/health', healthRouter);
 apiRouter.use('/me', meRouter);
-// login do escritório segue nos routers de sempre; login de cliente (portal) só
-// enxerga a Classificação das empresas liberadas pra ele
-apiRouter.use('/clients', requireAuth, json, porPapel({ escritorio: clientsRouter, cliente: portalClientesRouter }));
+// login do escritório segue nos routers de sempre (todos no MESMO escritório);
+// login de cliente (portal) só enxerga a Classificação das empresas liberadas pra ele
+apiRouter.use(
+  '/clients',
+  requireAuth,
+  json,
+  porPapel({ escritorio: doEscritorio(clientsRouter), cliente: portalClientesRouter }),
+);
 apiRouter.use(
   '/statements',
   requireAuth,
   soEmUpload(limiteUpload),
   jsonRevisao,
-  porPapel({ escritorio: statementsRouter, cliente: portalExtratosRouter }),
+  porPapel({ escritorio: doEscritorio(statementsRouter), cliente: portalExtratosRouter }),
 );
-apiRouter.use('/rules', requireAuth, soEscritorio, json, rulesRouter);
+apiRouter.use('/rules', requireAuth, soEscritorio, exigirEscritorio, json, rulesRouter);
 apiRouter.use(
   '/classificacoes',
   requireAuth,
   json,
-  porPapel({ escritorio: classificacoesRouter, cliente: portalClassificacoesRouter }),
+  porPapel({ escritorio: doEscritorio(classificacoesRouter), cliente: portalClassificacoesRouter }),
 );
-apiRouter.use('/acessos', requireAuth, soEscritorio, soEmPost(limiteConvites), json, acessosRouter);
+apiRouter.use('/acessos', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, acessosRouter);
+apiRouter.use('/equipe', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, equipeRouter);

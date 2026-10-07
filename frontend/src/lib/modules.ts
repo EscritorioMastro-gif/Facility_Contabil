@@ -18,8 +18,11 @@ export const MODULES: ModuleDef[] = [
     label: 'Cadastros',
     description: 'Cadastro de clientes e os ajustes ligados a eles (código Domínio, conta do banco, saldo inicial).',
     home: '/clientes',
-    match: (p) => p.startsWith('/clientes'),
-    nav: [{ to: '/clientes', label: 'Clientes' }],
+    match: (p) => p.startsWith('/clientes') || p.startsWith('/equipe'),
+    nav: [
+      { to: '/clientes', label: 'Clientes' },
+      { to: '/equipe', label: 'Equipe' },
+    ],
     soEscritorio: true,
   },
   {

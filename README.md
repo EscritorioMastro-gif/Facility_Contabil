@@ -104,18 +104,36 @@ escritório seguem exatamente como antes.
 4. (Opcional) *Authentication → Emails → Templates → Invite user*: texto do
    convite em português.
 
+## Equipe do escritório
+
+Todos os logins do escritório trabalham no **mesmo espaço**: veem e gravam os
+mesmos clientes, extratos, classificações e memórias, cada pessoa com o próprio
+login e a própria senha. Em **Cadastros → Equipe**, quem administra convida
+(e-mail com link pra pessoa criar a senha), reenvia o convite e tira da equipe —
+o acesso acaba na hora e o login fica bloqueado; o que a pessoa cadastrou fica.
+
+Por dentro (migration `0022`): `escritorio_membros` liga cada login ao
+escritório, identificado pelo id da **conta principal** (o 1º login criado — dona
+dos dados, não sai da equipe). As regras de acesso do banco usam
+`public.escritorio_atual()` em vez do login; `criado_por` (clientes e extratos)
+guarda quem cadastrou. Login fora da equipe não vê nada; apagar a conta principal
+no painel do Supabase fica **bloqueado** enquanto houver dados (antes, apagava
+tudo em cascata). As regras são testadas num Postgres de verdade
+(`backend/src/db/rls.test.ts`, PGlite).
+
 ## Segurança
 
 Auditoria de 2026-10-06. O que o sistema faz sozinho:
 
-- **Isolamento dos dados**: RLS por dono em todas as tabelas e no Storage;
-  login de cliente barrado do banco direto (regras restritivas, `0020`) e
-  atendido só pelas rotas do portal, que conferem a empresa liberada.
-  `_migrations` também fora da API (`0021`).
+- **Isolamento dos dados**: RLS por escritório em todas as tabelas e no
+  Storage (`0022`); login de cliente barrado do banco direto (regras
+  restritivas, `0020`) e atendido só pelas rotas do portal, que conferem a
+  empresa liberada. `_migrations` também fora da API (`0021`).
 - **Login**: token ES256 conferido localmente pela JWKS do Supabase (emissor,
-  público e validade); token inválido nunca vira consulta ao Supabase; IP que
-  erra 30 vezes em 5 min leva 429. Logout por **1 hora sem uso**
-  (`frontend/src/auth/inatividade.ts`). Volta pós-login só para caminho interno.
+  público e validade); se a JWKS não confirmar, o Supabase decide — e IP que
+  erra 30 vezes em 5 min leva 429 (IP real via `CF-Connecting-IP`). Logout por
+  **1 hora sem uso** (`frontend/src/auth/inatividade.ts`). Volta pós-login só
+  para caminho interno.
 - **Abuso**: limite de requisições por IP, de envio de arquivo e de convites
   por login (`backend/src/middleware/limite.ts`); corpo JSON só lido depois do
   login (1 MB; 10 MB na revisão); upload até 25 MB; o leitor recusa sem o
@@ -131,14 +149,13 @@ Auditoria de 2026-10-06. O que o sistema faz sozinho:
 
 O que depende de configuração (fora do código):
 
-1. Rodar `npm run migrate -w backend` (aplica a `0021`).
-2. Supabase → *Authentication → Providers → Email*: senha mínima **10** e exigir
-   letras + números (a tela pede 8, mas quem chama a API direto passaria com 6).
-3. Ativar **verificação em duas etapas** nas contas que administram o sistema:
+1. Rodar `npm run migrate -w backend` **antes** de publicar a API (a API nova
+   usa as funções das migrations).
+2. Ativar **verificação em duas etapas** nas contas que administram o sistema:
    Supabase, Render, GitHub e o Google Workspace do SMTP.
-4. **Backup**: o plano free do Supabase não tem backup — o projeto já foi perdido
+3. **Backup**: o plano free do Supabase não tem backup — o projeto já foi perdido
    uma vez. Plano Pro (backup diário) ou uma rotina própria de `pg_dump`.
-5. Repositório do GitHub **privado** (hoje é público: não tem dado de cliente,
+4. Repositório do GitHub **privado** (hoje é público: não tem dado de cliente,
    mas mapeia o sistema para quem quiser atacá-lo).
 
 ## Serviços
@@ -221,7 +238,7 @@ npm run test -w backend
 cd parser && .venv\Scripts\pytest
 ```
 
-Hoje: **194 testes no backend**, **100 no parser**.
+Hoje: **228 testes no backend** (incluindo as regras de acesso num Postgres de verdade), **100 no parser**.
 
 `backend/src/dominio/exporter.test.ts` tem um **golden test** que compara o
 arquivo gerado com um export real do Domínio (roda se `C:\SEFIP\lancto.txt`

@@ -14,6 +14,7 @@ import { ClassificarPage } from '@/features/classificacao/ClassificarPage';
 import { ClassificacaoRevisaoPage } from '@/features/classificacao/ClassificacaoRevisaoPage';
 import { ClassificacaoHistoricoPage } from '@/features/classificacao/ClassificacaoHistoricoPage';
 import { CategoriasPage } from '@/features/classificacao/CategoriasPage';
+import { EquipePage } from '@/features/equipe/EquipePage';
 
 export function App() {
   return (
@@ -30,6 +31,7 @@ export function App() {
       >
         <Route index element={<HubPage />} />
         <Route path="/clientes" element={<SoEscritorio><ClientsPage /></SoEscritorio>} />
+        <Route path="/equipe" element={<SoEscritorio><EquipePage /></SoEscritorio>} />
         <Route path="/memoria" element={<SoEscritorio><MemoriaPage /></SoEscritorio>} />
         <Route path="/importar" element={<SoEscritorio><ImportPage /></SoEscritorio>} />
         <Route path="/importar/excel" element={<SoEscritorio><ExcelImportPage /></SoEscritorio>} />

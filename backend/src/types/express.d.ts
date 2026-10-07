@@ -13,6 +13,8 @@ declare global {
       };
       /** Cliente Supabase já no contexto do usuário autenticado (RLS aplicada). */
       supabase?: SupabaseClient;
+      /** Escritório (dono dos dados) do login da equipe — lib/escritorio.ts. */
+      escritorioId?: string;
       /** Cliente com a secret key (ignora RLS) — portal do cliente e convites.
        *  Os testes injetam um fake; em produção vem de `serviceClient`. */
       supabaseAdmin?: SupabaseClient | null;

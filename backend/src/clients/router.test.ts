@@ -11,6 +11,7 @@ function appWith(handler: FakeHandler) {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.auth = { userId: 'user-1', email: 'a@b.com', token: 't' };
+    req.escritorioId = 'esc-1'; // escritório ≠ login: o dono gravado tem que ser o escritório
     req.supabase = client;
     next();
   });
@@ -82,7 +83,7 @@ describe('clientsRouter', () => {
     expect(res.status).toBe(201);
     expect(res.body.client.id).toBe('c1');
     expect(ops[0]).toMatchObject({ verb: 'insert' });
-    expect((ops[0]?.payload as { owner_id: string }).owner_id).toBe('user-1');
+    expect((ops[0]?.payload as { owner_id: string }).owner_id).toBe('esc-1');
     expect((ops[0]?.payload as { cnpj: string }).cnpj).toBe('11222333000181');
   });
 

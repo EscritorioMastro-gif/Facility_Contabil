@@ -19,6 +19,7 @@ function appWith(handler: FakeHandler) {
   app.use(express.json());
   app.use((req, _res, next) => {
     req.auth = { userId: 'u1', email: 'a@b.com', token: 't' };
+    req.escritorioId = 'esc-1'; // escritório ≠ login: o dono gravado tem que ser o escritório
     req.supabase = client;
     next();
   });
@@ -94,6 +95,11 @@ describe('POST /statements', () => {
     const txnInsert = ops.find((o) => o.table === 'transactions' && o.verb === 'insert');
     const rows = txnInsert?.payload as Array<Record<string, unknown>>;
     expect(rows).toHaveLength(2);
+    // arquivo na pasta do escritório; extrato e lançamentos do escritório — não do login
+    expect((storageOps[0] as { path: string }).path.startsWith('esc-1/')).toBe(true);
+    const stmtInsert = ops.find((o) => o.table === 'statements' && o.verb === 'insert');
+    expect((stmtInsert?.payload as { owner_id: string }).owner_id).toBe('esc-1');
+    expect(rows.every((r) => r.owner_id === 'esc-1')).toBe(true);
     expect(rows[0]).toMatchObject({ direction: 'saida', hist_code: '186', valor: '10.00' });
     expect(rows[1]).toMatchObject({ direction: 'entrada', hist_code: '138', valor: '2340.55' });
   });
@@ -910,6 +916,7 @@ describe('PATCH /statements/:id/transactions', () => {
     app.use(express.json());
     app.use((req, _res, next) => {
       req.auth = { userId: 'u1', email: 'a@b.com', token: 't' };
+      req.escritorioId = 'esc-1'; // escritório ≠ login: o dono gravado tem que ser o escritório
       req.supabase = client;
       next();
     });
@@ -976,6 +983,7 @@ describe('PATCH /statements/:id/classificacao', () => {
     app.use(express.json());
     app.use((req, _res, next) => {
       req.auth = { userId: 'u1', email: 'a@b.com', token: 't' };
+      req.escritorioId = 'esc-1'; // escritório ≠ login: o dono gravado tem que ser o escritório
       req.supabase = client;
       next();
     });

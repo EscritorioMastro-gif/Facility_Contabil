@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { LIMITE_LINHAS, lerTodas, mapPgrstError } from '../lib/pgrst.js';
 import { badRequest, notFound } from '../lib/httpError.js';
 import { logger } from '../lib/logger.js';
+import { escritorioDe } from '../lib/escritorio.js';
 import {
   bulkUpdateClassificacaoSchema,
   bulkUpdateTransactionsSchema,
@@ -232,7 +233,8 @@ export async function gravarLancamentos(
 async function novaImportacao(
   supabase: SupabaseClient,
   p: {
-    userId: string;
+    /** dono dos dados = o escritório (lib/escritorio.ts), não o login */
+    escritorioId: string;
     file: Express.Multer.File;
     dto: Omit<CreateStatement, 'pdf_password'>;
     formato: string;
@@ -241,7 +243,7 @@ async function novaImportacao(
     extras?: Record<string, unknown>;
   },
 ) {
-  const { userId, file, dto, formato } = p;
+  const { escritorioId, file, dto, formato } = p;
 
   // cliente existe / é do usuário
   const { data: client, error: cErr } = await supabase
@@ -261,7 +263,7 @@ async function novaImportacao(
   const { data: stmt, error: sErr } = await supabase
     .from('statements')
     .insert({
-      owner_id: userId,
+      owner_id: escritorioId,
       client_id: dto.client_id,
       arquivo_nome: file.originalname,
       formato,
@@ -279,7 +281,7 @@ async function novaImportacao(
   const statementId = stmt.id as string;
 
   // upload no storage
-  const path = `${userId}/${statementId}/${sanitizeName(file.originalname)}`;
+  const path = `${escritorioId}/${statementId}/${sanitizeName(file.originalname)}`;
   const { error: upErr } = await supabase.storage
     .from(BUCKET)
     .upload(path, file.buffer, { contentType: tipoPorNome(file.originalname), upsert: true });
@@ -306,7 +308,7 @@ async function novaImportacao(
   }
 
   const { statement, transactions } = await gravarLancamentos(supabase, {
-    ownerId: userId,
+    ownerId: escritorioId,
     statementId,
     clientId: dto.client_id,
     histEntrada: dto.hist_code_entrada,
@@ -342,7 +344,7 @@ statementsRouter.post('/', upload.single('file'), async (req, res, next) => {
 
     const file = req.file;
     const out = await novaImportacao(db(req), {
-      userId: req.auth!.userId,
+      escritorioId: escritorioDe(req),
       file,
       dto,
       formato,
@@ -408,7 +410,7 @@ statementsRouter.post('/excel', upload.single('file'), async (req, res, next) =>
 
     const file = req.file;
     const out = await novaImportacao(db(req), {
-      userId: req.auth!.userId,
+      escritorioId: escritorioDe(req),
       file,
       dto,
       formato,
@@ -428,10 +430,10 @@ statementsRouter.post('/excel', upload.single('file'), async (req, res, next) =>
 // --------------------------------------------------------------------------- #
 statementsRouter.post('/classificar', upload.single('file'), async (req, res, next) => {
   const supabase = db(req);
-  const userId = req.auth!.userId;
   let statementId: string | null = null;
 
   try {
+    const escritorioId = escritorioDe(req);
     if (!req.file) throw badRequest('Arquivo do extrato é obrigatório (campo "file")');
     const dto = classificarStatementSchema.parse(req.body);
 
@@ -453,7 +455,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
     const { data: stmt, error: sErr } = await supabase
       .from('statements')
       .insert({
-        owner_id: userId,
+        owner_id: escritorioId,
         client_id: dto.client_id,
         arquivo_nome: req.file.originalname,
         formato,
@@ -466,7 +468,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
     if (sErr) throw mapPgrstError(sErr, 'criar importação');
     statementId = stmt.id as string;
 
-    const path = `${userId}/${statementId}/${sanitizeName(req.file.originalname)}`;
+    const path = `${escritorioId}/${statementId}/${sanitizeName(req.file.originalname)}`;
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
       .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
@@ -496,7 +498,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
     }
 
     const { statement, transactions } = await gravarLancamentos(supabase, {
-      ownerId: userId,
+      ownerId: escritorioId,
       statementId,
       clientId: dto.client_id,
       histEntrada: '138',
@@ -520,10 +522,10 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
 // --------------------------------------------------------------------------- #
 statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, next) => {
   const supabase = db(req);
-  const userId = req.auth!.userId;
   const statementId = req.params.id as string;
 
   try {
+    const escritorioId = escritorioDe(req);
     if (!req.file) throw badRequest('Arquivo do extrato é obrigatório (campo "file")');
 
     const formato = detectFormat(req.file.originalname);
@@ -550,7 +552,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     // continua lá; só quem já foi puxado pra Importação (revisao) permanece assim.
     const statusFinal = stmt.status === 'classificacao' ? 'classificacao' : 'revisao';
 
-    const path = `${userId}/${statementId}/${sanitizeName(req.file.originalname)}`;
+    const path = `${escritorioId}/${statementId}/${sanitizeName(req.file.originalname)}`;
     const { error: upErr } = await supabase.storage
       .from(BUCKET)
       .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
@@ -583,7 +585,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     if (dErr) throw mapPgrstError(dErr, 'limpar lançamentos antigos');
 
     const { statement, transactions } = await gravarLancamentos(supabase, {
-      ownerId: userId,
+      ownerId: escritorioId,
       statementId,
       clientId: stmt.client_id,
       histEntrada: stmt.hist_code_entrada,
@@ -658,7 +660,8 @@ const EXPORT_BUCKET = 'exports';
 statementsRouter.post('/:id/export', async (req, res, next) => {
   try {
     const supabase = db(req);
-    const userId = req.auth!.userId;
+    const userId = req.auth!.userId; // quem gerou
+    const escritorioId = escritorioDe(req); // dono do arquivo
     const statementId = req.params.id;
 
     const { data: stmt, error } = await supabase
@@ -733,14 +736,14 @@ statementsRouter.post('/:id/export', async (req, res, next) => {
     }
 
     // guarda no bucket + registra (best-effort no storage)
-    const path = `${userId}/${statementId}/${out.filename}`;
+    const path = `${escritorioId}/${statementId}/${out.filename}`;
     const up = await supabase.storage
       .from(EXPORT_BUCKET)
       .upload(path, out.content, { contentType: 'text/plain; charset=iso-8859-1', upsert: true });
     if (up.error) logger.warn({ err: up.error }, 'falha ao subir arquivo de export (segue mesmo assim)');
 
     await supabase.from('export_files').insert({
-      owner_id: userId,
+      owner_id: escritorioId,
       statement_id: statementId,
       storage_path: up.error ? null : path,
       filename: out.filename,

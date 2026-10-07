@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../app.js';
+
+// o banco responde qual é o escritório do login (public.escritorio_atual)
+const banco = vi.hoisted(() => ({ escritorio: 'esc-1' as string | null }));
+vi.mock('../supabase.js', () => ({
+  userClient: () => ({ rpc: async () => ({ data: banco.escritorio, error: null }) }),
+  anonClient: { auth: { getUser: async () => ({ data: { user: null }, error: { message: 'não' } }) } },
+  serviceClient: null,
+}));
 
 function b64url(input: Buffer | string): string {
   return Buffer.from(input).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -38,5 +46,19 @@ describe('login de cliente (app_metadata.papel = cliente) na API', () => {
     // sem client_id o router de memória responde 400 (validação dele) — prova que passou
     expect((await request(app).get('/api/rules').set('Authorization', escritorio)).status).toBe(400);
     expect((await request(app).get('/api/acessos').set('Authorization', escritorio)).status).toBe(400);
+  });
+
+  it('login do escritório que ainda não está na equipe: 403 dizendo o que fazer', async () => {
+    const foraDaEquipe = token({ sub: 'fora-1', email: 'novo@escritorio.com', app_metadata: { provider: 'email' } });
+    banco.escritorio = null;
+    try {
+      for (const rota of ['/api/clients', '/api/rules?client_id=11111111-1111-1111-1111-111111111111', '/api/equipe']) {
+        const res = await request(app).get(rota).set('Authorization', foraDaEquipe);
+        expect(res.status).toBe(403);
+        expect(res.body.error).toMatch(/equipe do escritório/);
+      }
+    } finally {
+      banco.escritorio = 'esc-1';
+    }
   });
 });

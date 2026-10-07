@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapPgrstError } from '../lib/pgrst.js';
+import { escritorioDe } from '../lib/escritorio.js';
 import { notFound } from '../lib/httpError.js';
 import { clientCreateSchema, clientListQuerySchema, clientUpdateSchema } from './schema.js';
 
@@ -68,7 +69,7 @@ clientsRouter.post('/', async (req, res, next) => {
     const dto = clientCreateSchema.parse(req.body);
     const { data, error } = await db(req)
       .from(TABLE)
-      .insert({ ...dto, owner_id: req.auth!.userId })
+      .insert({ ...dto, owner_id: escritorioDe(req) })
       .select(COLUMNS)
       .single();
     if (error) throw mapPgrstError(error, 'criar cliente');
