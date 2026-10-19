@@ -50,23 +50,54 @@ function formComArquivo(file: Arquivo): FormData {
 
 const COM_ARTIGO = { extrato: 'o extrato', planilha: 'a planilha' } as const;
 
+/**
+ * Leitor dormindo no plano gratuito do Render: a chamada da API (de dentro do
+ * Render) recebe 502 na hora e NÃO acorda o leitor — quem acorda é a tela
+ * (frontend/src/lib/acordarLeitor.ts), o que leva ~30-60 s. Enquanto isso a API
+ * tenta de novo em vez de devolver erro na primeira resposta. O leitor em si
+ * nunca responde 5xx.
+ */
+const LEITOR_ACORDANDO = new Set([502, 503, 504]);
+export const ESPERA_LEITOR_MS = 60_000;
+const INTERVALO_TENTATIVAS_MS = 3_000;
+
+const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /** POST no serviço Python de parsing. Erros do parser viram 422 (mensagem pro usuário). */
 async function postParser<T>(path: string, form: FormData, oQue: keyof typeof COM_ARTIGO): Promise<T> {
   const headers: Record<string, string> = {};
   if (config.parser.sharedSecret) headers['X-Parser-Secret'] = config.parser.sharedSecret;
 
+  const inicio = Date.now();
+  const aindaEspera = () => Date.now() - inicio < ESPERA_LEITOR_MS;
   let res: Response;
-  try {
-    res = await fetch(`${config.parser.url}${path}`, {
-      method: 'POST',
-      body: form,
-      headers,
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch (err) {
-    throw badGateway(`Serviço de leitura de ${oQue} indisponível`, {
-      detail: (err as Error).message,
-    });
+  for (;;) {
+    try {
+      res = await fetch(`${config.parser.url}${path}`, {
+        method: 'POST',
+        body: form,
+        headers,
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (err) {
+      // estourou o tempo = leitor acordado mas lento: repetir só dobraria a espera
+      if ((err as Error).name !== 'TimeoutError' && aindaEspera()) {
+        await esperar(INTERVALO_TENTATIVAS_MS);
+        continue;
+      }
+      throw badGateway(`Serviço de leitura de ${oQue} indisponível`, {
+        detail: (err as Error).message,
+      });
+    }
+    if (!LEITOR_ACORDANDO.has(res.status)) break;
+    if (!aindaEspera()) {
+      throw badGateway(
+        `O leitor de extratos não respondeu (HTTP ${res.status}). Se o sistema ficou parado, ele ` +
+          'pode estar acordando — tente de novo em 1 minuto.',
+      );
+    }
+    await res.body?.cancel().catch(() => {});
+    await esperar(INTERVALO_TENTATIVAS_MS);
   }
 
   const text = await res.text();

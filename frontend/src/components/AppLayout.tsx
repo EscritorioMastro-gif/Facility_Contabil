@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
+import { acordarLeitor } from '@/lib/acordarLeitor';
 import { moduleAtPath } from '@/lib/modules';
 import { SidebarNav } from './Sidebar';
 
@@ -10,6 +11,8 @@ export function AppLayout() {
 
   // fecha a gaveta ao trocar de rota
   useEffect(() => setMenuOpen(false), [location.pathname]);
+  // entrou no sistema: o leitor já vai acordando enquanto a pessoa navega
+  useEffect(acordarLeitor, []);
 
   return (
     <div className="min-h-screen bg-cream">

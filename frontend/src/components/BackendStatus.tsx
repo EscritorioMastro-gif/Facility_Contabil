@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { acordarLeitor } from '@/lib/acordarLeitor';
 import { env } from '@/lib/env';
 
 type Check = { ok: boolean; detail?: string };
@@ -11,14 +12,16 @@ const NOMES: Record<string, string> = {
 
 /**
  * No plano gratuito do Render cada serviço dorme após 15 min sem uso e leva até
- * ~1 min pra acordar. Enquanto o leitor acorda, a API responde 503 COM o estado
- * de cada serviço — isso é "leitor acordando", não "API fora do ar". Por isso o
+ * ~1 min pra acordar. Com o leitor dormindo, a API responde 503 COM o estado de
+ * cada serviço — isso é "leitor dormindo", não "API fora do ar". Por isso o
  * corpo do 503 é lido aqui (o `api()` descarta), e só falha de rede vira erro.
+ * A API não consegue acordar o leitor (ver lib/acordarLeitor.ts): a tela acorda.
  */
 async function lerStatus(): Promise<DeepHealth> {
   const res = await fetch(`${env.apiUrl}/api/health/deep`);
   const body = (await res.json().catch(() => null)) as DeepHealth | null;
   if (!body?.checks) throw new Error(`HTTP ${res.status}`);
+  if (body.checks.parser?.ok === false) acordarLeitor();
   return body;
 }
 
@@ -56,8 +59,8 @@ export function BackendStatus() {
       )}
       {data && !data.ok && !isError && (
         <p className="mt-2 text-xs text-slate-400">
-          No plano gratuito do Render os serviços dormem após 15 min sem uso e voltam sozinhos em até 1
-          min. Esta caixa se atualiza sozinha.
+          No plano gratuito do Render os serviços dormem após 15 min sem uso. O sistema já pediu pro
+          leitor acordar — leva até 1 min. Esta caixa se atualiza sozinha.
         </p>
       )}
     </div>

@@ -1,3 +1,4 @@
+import { acordarLeitor } from './acordarLeitor';
 import { env } from './env';
 import { supabase } from './supabase';
 
@@ -25,6 +26,8 @@ export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Pro
   let payload: BodyInit | undefined;
 
   if (body instanceof FormData) {
+    // todo envio de arquivo passa pelo leitor de extratos — acorda se dormiu
+    acordarLeitor();
     payload = body;
   } else if (body !== undefined) {
     finalHeaders.set('Content-Type', 'application/json');

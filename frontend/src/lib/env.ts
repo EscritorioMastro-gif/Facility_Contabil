@@ -12,4 +12,6 @@ export const env = {
   supabaseAnonKey: anonKey,
   /** Vazio em dev (usa o proxy /api do Vite). */
   apiUrl: (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, ''),
+  /** Endereço público do leitor — só pra acordá-lo no Render (lib/acordarLeitor.ts). Vazio em dev. */
+  parserUrl: (import.meta.env.VITE_PARSER_URL ?? '').replace(/\/$/, ''),
 } as const;

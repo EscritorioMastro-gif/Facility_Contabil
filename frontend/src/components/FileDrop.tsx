@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { acordarLeitor } from '@/lib/acordarLeitor';
 
 const ACCEPT = '.pdf,.ofx,.qfx,.csv,.txt,.xls,.xlsx';
 
@@ -17,6 +18,11 @@ export function FileDrop({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
+  // escolheu o arquivo: o leitor vai acordando enquanto a pessoa preenche o resto
+  const escolher = (f: File | null) => {
+    if (f) acordarLeitor();
+    onFile(f);
+  };
 
   return (
     <div
@@ -30,7 +36,7 @@ export function FileDrop({
         e.preventDefault();
         setOver(false);
         const f = e.dataTransfer.files?.[0];
-        if (f) onFile(f);
+        if (f) escolher(f);
       }}
       className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-8 text-center text-sm transition-colors ${
         over ? 'border-brand-500 bg-brand-50' : 'border-slate-300 bg-slate-50 hover:bg-slate-100'
@@ -41,7 +47,7 @@ export function FileDrop({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={(e) => onFile(e.target.files?.[0] ?? null)}
+        onChange={(e) => escolher(e.target.files?.[0] ?? null)}
       />
       {file ? (
         <div>

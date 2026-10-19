@@ -6,9 +6,12 @@
 # pede os valores do Supabase (sync: false); o segredo API↔leitor é gerado.
 # Os serviços se acham pelos endereços públicos https://<nome>.onrender.com —
 # se o Render der outro endereço a algum serviço, ajuste PARSER_URL,
-# FRONTEND_ORIGIN e VITE_API_URL abaixo.
+# FRONTEND_ORIGIN, VITE_API_URL e VITE_PARSER_URL (e o connect-src da CSP) abaixo.
 #
 # Plano free: cada serviço dorme após 15 min sem uso e leva ~1 min pra acordar.
+# O Render só acorda com chamada de FORA dele: a API chamando o leitor dormindo
+# recebe 502 na hora — por isso a tela acorda o leitor (VITE_PARSER_URL) e a
+# API espera ele subir antes de desistir.
 # Pra uso diário, mude `plan` da API e do leitor pra `starter`.
 # ==========================================================================
 
@@ -92,14 +95,15 @@ services:
         source: /*
         destination: /index.html
     # Cabeçalhos de segurança da tela. CSP: só roda script do próprio site e só
-    # conversa com a API e o Supabase — um script injetado não consegue mandar
-    # os dados (nem o login guardado no navegador) pra outro lugar.
+    # conversa com a API, o Supabase e o /health do leitor (pra acordá-lo) — um
+    # script injetado não consegue mandar os dados (nem o login guardado no
+    # navegador) pra outro lugar.
     # frame-ancestors / X-Frame-Options: ninguém embute o sistema num iframe
-    # (clickjacking). Se mudar o endereço da API, ajuste o connect-src.
+    # (clickjacking). Se mudar o endereço da API ou do leitor, ajuste o connect-src.
     headers:
       - path: /*
         name: Content-Security-Policy
-        value: "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://facility-contabil-mastro-api.onrender.com https://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+        value: "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://facility-contabil-mastro-api.onrender.com https://facility-contabil-mastro-parser.onrender.com https://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
       - path: /*
         name: X-Frame-Options
         value: DENY
@@ -119,3 +123,6 @@ services:
         sync: false
       - key: VITE_API_URL
         value: https://facility-contabil-mastro-api.onrender.com
+      # só pra acordar o leitor que dormiu (frontend/src/lib/acordarLeitor.ts)
+      - key: VITE_PARSER_URL
+        value: https://facility-contabil-mastro-parser.onrender.com
