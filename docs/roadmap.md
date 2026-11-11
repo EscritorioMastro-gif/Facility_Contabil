@@ -15,8 +15,9 @@
 
 > **Retirado do sistema em 2026-10-06** (pedido do escritório): tela, API,
 > leitores de plano de contas/balancete e relatórios em PDF saíram do código, e
-> a migration `0019` apaga as tabelas (só se estiverem vazias). O registro
-> abaixo fica só como histórico.
+> a migration `0019` apagou as tabelas (só se estivessem vazias). Em 2026-11-11 as
+> migrations do módulo (0009–0016 e a 0019) saíram do repositório; a `0024` apaga o
+> que ainda sobrar num banco antigo. O registro abaixo fica só como histórico.
 
 Escrituração contábil em partida dobrada por dentro do próprio sistema —
 roadmap e numeração próprios ("C" de Contábil), independentes do M1-M8 acima

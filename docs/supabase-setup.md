@@ -55,9 +55,10 @@ para que só usuários criados manualmente por você tenham acesso.
 
 ## 5. Conferir
 
-No **Table Editor** devem existir: `clients`, `chart_accounts`, `mapping_rules`,
-`statements`, `transactions`, `export_files`. Em **Storage**: buckets `statements`
-e `exports` (privados).
+No **Table Editor** devem existir: `clients`, `mapping_rules`, `statements`,
+`transactions`, `export_files`, `classificacoes`, `classificacoes_gerais`,
+`cliente_acessos`, `escritorio_membros` e `_migrations`. Em **Storage**: buckets
+`statements` e `exports` (privados).
 
 Rode `GET http://localhost:8080/api/health/deep` — `supabase` deve vir `ok: true`.
 
