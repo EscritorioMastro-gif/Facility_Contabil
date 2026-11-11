@@ -110,6 +110,8 @@ export type Transaction = {
   regra_id: string | null;
   origem_preenchimento: 'vazio' | 'manual' | 'regra' | 'memoria' | 'conferir';
   classificacao_id: string | null;
+  /** classificação posta pela memória: 'memoria' = sempre foi essa; 'conferir' = sugestão (já teve outras) */
+  classificacao_origem?: 'memoria' | 'conferir' | null;
 };
 
 export type Classificacao = {
@@ -118,8 +120,18 @@ export type Classificacao = {
   direction: Direction;
   nome: string;
   ativo: boolean;
+  /** item da lista geral de onde veio (null = avulsa, criada pelo escritório) */
+  geral_id?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/** Item da lista geral de classificações do escritório. */
+export type ClassificacaoGeral = {
+  id: string;
+  direction: Direction;
+  nome: string;
+  created_at: string;
 };
 
 export type MatchType = 'contains' | 'starts_with' | 'regex' | 'exact';

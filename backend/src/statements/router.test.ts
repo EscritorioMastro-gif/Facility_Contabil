@@ -180,7 +180,9 @@ describe('POST /statements', () => {
     const { app, ops } = appWith(
       handlerFor({
         'clients.select': () => ({ id: 'c1', saldo_inicial: '1000.00' }),
-        'statements.select': () => [{ saldo_final: '5000.00', period_end: '2026-06-30' }],
+        // a trava de duplicado não acha nada; qualquer outra leitura devolveria um extrato anterior
+        'statements.select': (op) =>
+          op.filters.some(([c]) => c === 'impressao') ? [] : [{ saldo_final: '5000.00', period_end: '2026-06-30' }],
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'revisao', totais: {} }),
         'transactions.insert': () => null,
@@ -196,7 +198,10 @@ describe('POST /statements', () => {
 
     const insert = ops.find((o) => o.table === 'statements' && o.verb === 'insert');
     expect((insert?.payload as { saldo_inicial: number }).saldo_inicial).toBe(1000);
-    expect(ops.some((o) => o.table === 'statements' && o.verb === 'select')).toBe(false);
+    // não buscou o saldo final de extrato anterior (só a trava de duplicado lê extratos)
+    expect(
+      ops.some((o) => o.table === 'statements' && o.verb === 'select' && !o.filters.some(([c]) => c === 'impressao')),
+    ).toBe(false);
 
     // saldo_final = 1000 + 2340,55 (entrada) − 10,00 (saída) = 3330,55
     const saldoFinal = ops

@@ -60,6 +60,9 @@ const COM_ARTIGO = { extrato: 'o extrato', planilha: 'a planilha' } as const;
 const LEITOR_ACORDANDO = new Set([502, 503, 504]);
 export const ESPERA_LEITOR_MS = 60_000;
 const INTERVALO_TENTATIVAS_MS = 3_000;
+/** Tempo máximo de UMA leitura: PDF de 8.000 lançamentos (~570 páginas) leva
+ *  ~16 s num PC e bem mais no plano gratuito do Render (CPU fracionada). */
+export const TEMPO_LEITURA_MS = 10 * 60_000;
 
 const esperar = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -77,7 +80,7 @@ async function postParser<T>(path: string, form: FormData, oQue: keyof typeof CO
         method: 'POST',
         body: form,
         headers,
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(TEMPO_LEITURA_MS),
       });
     } catch (err) {
       // estourou o tempo = leitor acordado mas lento: repetir só dobraria a espera

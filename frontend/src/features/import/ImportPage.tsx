@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
+import { ErroImportacao } from '@/features/statements/ErroImportacao';
 import { useCreateStatement, type ImportResult } from '@/features/statements/api';
 import { FileDrop } from '@/components/FileDrop';
 import { PuxarClassificacaoForm } from './PuxarClassificacaoForm';
@@ -39,13 +40,6 @@ export function ImportPage() {
     );
   }
 
-  const err = createMut.error;
-  const errMsg =
-    err instanceof ApiError
-      ? err.message + (err.details ? ` (${JSON.stringify(err.details)})` : '')
-      : err
-        ? String(err)
-        : null;
 
   if (result) {
     return (
@@ -108,9 +102,8 @@ export function ImportPage() {
             </div>
           )}
 
-          {errMsg && (
-            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-              <p>{errMsg}</p>
+          {createMut.error && (
+            <ErroImportacao err={createMut.error}>
               {sugerirExcel && (
                 <p className="mt-1">
                   Planilha de controle do próprio cliente? Use a{' '}
@@ -120,7 +113,7 @@ export function ImportPage() {
                   , onde você escolhe a coluna de data, de valor e de histórico.
                 </p>
               )}
-            </div>
+            </ErroImportacao>
           )}
 
           <button type="submit" className="btn-primary w-full" disabled={!canSubmit}>

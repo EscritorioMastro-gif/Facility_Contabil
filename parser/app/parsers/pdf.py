@@ -34,6 +34,8 @@ _MESES_ABREV = {
 }
 
 _PERIODO_RE = re.compile(rf"per[íi]odo[^0-9]{{0,25}}({_DATE})\D+?({_DATE})", re.IGNORECASE)
+_DATA_SOLTA = r"(\d{2})\s*[/.-]\s*(\d{2})\s*[/.-]\s*(\d{4})"
+_PERIODO_SOLTO_RE = re.compile(rf"per[íi]odo[^0-9]{{0,25}}{_DATA_SOLTA}\D{{1,12}}?{_DATA_SOLTA}", re.IGNORECASE)
 _PERIODO_EXTENSO_RE = re.compile(
     r"(\d{1,2})\s+DE\s+([A-Za-zçãÇÃ]+)\s+DE\s+(\d{4})\s+(?:a|at[ée])\s+"
     r"(\d{1,2})\s+DE\s+([A-Za-zçãÇÃ]+)\s+DE\s+(\d{4})",
@@ -99,13 +101,45 @@ def extract_pdf_text(content: bytes, password: str | None) -> str:
     with open_pdf(content, password) as pdf:
         parts = []
         for p in pdf.pages:
-            parts.append(p.extract_text(layout=True) or p.extract_text() or "")
+            # sem as letras repetidas do "negrito falso" (ver _palavras): senão
+            # "ID da operação" vira "IIDD ddaa ooppeerraaççããoo" e o layout não é reconhecido
+            sem_repetidas = _sem_repetidas(p)
+            parts.append(sem_repetidas.extract_text(layout=True) or sem_repetidas.extract_text() or "")
+            p.close()  # extrato de centenas de páginas: libera o cache de cada uma
         return "\n".join(parts)
+
+
+def _sem_repetidas(page):
+    """A página sem as letras repetidas do "negrito falso" (o mesmo texto escrito
+    duas vezes quase no mesmo lugar). O dedupe do pdfplumber é caro (~3x o
+    tempo de leitura num PDF de 570 páginas), então só roda na página que tem
+    duas letras iguais na mesma posição — numa página normal isso não existe."""
+    vistas: set[tuple[str, int, int]] = set()
+    for c in page.chars:
+        if not c["text"].strip():
+            continue
+        chave = (c["text"], round(c["x0"]), round(c["top"]))
+        if chave in vistas:
+            return page.dedupe_chars()
+        vistas.add(chave)
+    return page
+
+
+def _palavras(page) -> list[dict]:
+    """Palavras da página sem as letras repetidas: título em "negrito falso"
+    vira "DDaattaa" e o cabeçalho da tabela deixa de ser achado (Mercado Pago
+    09/2026: a 1ª página inteira sumia do extrato)."""
+    return _sem_repetidas(page).extract_words()
 
 
 def _period(text: str, seen: list[date]) -> tuple[date | None, date | None]:
     if seen:
         return (min(seen), max(seen))
+    return _periodo_impresso(text)
+
+
+def _periodo_impresso(text: str) -> tuple[date | None, date | None]:
+    """"Período: 01/10/2026 a 31/10/2026" (ou por extenso) impresso no extrato."""
     m = _PERIODO_RE.search(text)
     if m:
         a, b = parse_date(m.group(1)), parse_date(m.group(2))
@@ -118,6 +152,14 @@ def _period(text: str, seen: list[date]) -> tuple[date | None, date | None]:
             b = date(int(m.group(6)), _MESES[m.group(5).lower()], int(m.group(4)))
             return a, b
         except (KeyError, ValueError):
+            pass
+    # "de 01 / 07 / 2026 até 31 / 07 / 2026" (Sicredi), "De 01-09-2026 al 30-09-2026" (Mercado Pago)
+    m = _PERIODO_SOLTO_RE.search(text)
+    if m:
+        try:
+            g = [int(x) for x in m.groups()]
+            return date(g[2], g[1], g[0]), date(g[5], g[4], g[3])
+        except ValueError:
             pass
     return (None, None)
 
@@ -391,15 +433,17 @@ def _parse_bb_extrato_cc_pdf(content: bytes, password: str | None, text: str) ->
     seen: list[date] = []
     with open_pdf(content, password) as pdf:
         for page in pdf.pages:
-            words = page.extract_words()
+            words = _palavras(page)
             cab = _bb_cc_colunas(words)
             if cab is None:
+                page.close()
                 continue
             topo_cab, x = cab
             seps = sorted(
                 {round(e["top"], 1) for e in page.edges if e["orientation"] == "h" and e["top"] > topo_cab}
             )
             seps.append(page.height)
+            page.close()  # libera o cache: extrato longo tem centenas de páginas
 
             for a, b in zip(seps, seps[1:]):
                 faixa = [w for w in words if a <= w["top"] < b]
@@ -522,11 +566,12 @@ def _parse_mercadopago_pdf(content: bytes, password: str | None, text: str) -> P
 
     with open_pdf(content, password) as pdf:
         for page in pdf.pages:
-            words = page.extract_words()
+            words = _palavras(page)
             cab = _mp_colunas(words)
             if cab is not None:
                 topo, x = cab
             elif x is None:
+                page.close()
                 continue  # a tabela ainda não começou
             else:
                 topo = 0.0  # página sem o cabeçalho: a tabela vem desde o topo
@@ -535,6 +580,7 @@ def _parse_mercadopago_pdf(content: bytes, password: str | None, text: str) -> P
                 *sorted({round(e["top"], 1) for e in page.edges if e["orientation"] == "h" and e["top"] > topo}),
                 page.height,
             ]
+            page.close()  # libera o cache: extrato longo tem centenas de páginas
 
             for a, b in zip(seps, seps[1:]):
                 faixa = [w for w in words if a <= w["top"] < b]
@@ -738,10 +784,14 @@ def _result(text: str, txns: list[NormalizedTransaction], seen: list[date]) -> P
                 "do PDF; confira com atenção ou use o OFX/CSV"
             )
     ds, de = _period(text, seen)
+    impresso_ini, impresso_fim = _periodo_impresso(text)
     return ParseResult(
         format="pdf",
         period_start=ds.isoformat() if ds else None,
         period_end=de.isoformat() if de else None,
+        # parse_statement usa se contiver todos os lançamentos (ver periodo.py)
+        declared_start=impresso_ini.isoformat() if impresso_ini else None,
+        declared_end=impresso_fim.isoformat() if impresso_fim else None,
         transactions=txns,
         warnings=warnings,
     )

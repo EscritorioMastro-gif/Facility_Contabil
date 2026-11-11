@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Paginacao, useItensPorPagina } from '@/components/Paginacao';
 import { ApiError } from '@/lib/api';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
-import { useDeleteStatement, useDeleteStatements, useStatements } from '@/features/statements/api';
+import { useDeleteStatement, useDeleteStatements, useStatementsPaginados } from '@/features/statements/api';
 import { BaixarDominio } from '@/features/statements/BaixarDominio';
 import { ReimportarExtrato } from '@/features/statements/ReimportarExtrato';
 
@@ -20,10 +21,27 @@ export function HistoricoPage() {
   const { data: clients } = useClients({ ativo: 'all' });
   const [clientId, setClientId] = useState('');
   const [status, setStatus] = useState<StatementStatus | ''>('');
-  const { data: statements, isLoading, error } = useStatements({
-    client_id: clientId || undefined,
-    status: status || undefined,
-  });
+  // todos os extratos ficam no histórico, página a página (sem teto de quantos aparecem)
+  const [porPagina, setPorPagina] = useItensPorPagina('historico');
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => setPagina(1), [clientId, status, porPagina]);
+  const { data, isLoading, error } = useStatementsPaginados(
+    {
+      client_id: clientId || undefined,
+      status: status || undefined,
+      // os que ainda estão no módulo Classificação (não puxados) ficam só no histórico de lá
+      exceto_status: status ? undefined : 'classificacao',
+    },
+    pagina,
+    porPagina,
+  );
+  const statements = data?.statements;
+  const total = data?.total ?? 0;
+  const paginas = Math.max(1, Math.ceil(total / porPagina));
+  // excluiu os últimos da última página: volta uma
+  useEffect(() => {
+    if (data && pagina > paginas) setPagina(paginas);
+  }, [data, pagina, paginas]);
 
   const delMut = useDeleteStatement();
   const delManyMut = useDeleteStatements();
@@ -108,6 +126,16 @@ export function HistoricoPage() {
           </div>
         </div>
       )}
+
+      <Paginacao
+        pagina={pagina}
+        paginas={paginas}
+        porPagina={porPagina}
+        total={total}
+        onPagina={setPagina}
+        onPorPagina={setPorPagina}
+        rotulo="importações"
+      />
 
       <div className="card overflow-x-auto">
         {isLoading ? (
@@ -208,6 +236,16 @@ export function HistoricoPage() {
           </table>
         )}
       </div>
+
+      <Paginacao
+        pagina={pagina}
+        paginas={paginas}
+        porPagina={porPagina}
+        total={total}
+        onPagina={setPagina}
+        onPorPagina={setPorPagina}
+        rotulo="importações"
+      />
 
       <ConfirmDialog
         open={!!deleting}

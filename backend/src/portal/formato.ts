@@ -8,7 +8,8 @@ import type { Empresa } from './acesso.js';
 export const STMT_COLS_PORTAL =
   'id, client_id, arquivo_nome, formato, period_start, period_end, status, origem_modulo, totais, erro_msg, created_at, updated_at';
 
-export const TXN_COLS_PORTAL = 'id, ordem, data, descricao_raw, valor, direction, ignorado, classificacao_id';
+export const TXN_COLS_PORTAL =
+  'id, ordem, data, descricao_raw, valor, direction, ignorado, classificacao_id, classificacao_origem';
 
 type Linha = Record<string, unknown>;
 type ClienteEmbed = { razao_social?: unknown; cnpj?: unknown } | null | undefined;
@@ -59,6 +60,7 @@ export function paraLancamento(t: Linha) {
     direction: t.direction,
     ignorado: t.ignorado,
     classificacao_id: t.classificacao_id ?? null,
+    classificacao_origem: t.classificacao_origem ?? null,
     // fluxo contábil — fora do portal
     conta_contabil: null,
     hist_code: null,

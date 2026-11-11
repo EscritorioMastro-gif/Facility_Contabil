@@ -19,7 +19,15 @@ import {
   listStatementsQuerySchema,
 } from '../statements/schema.js';
 import { callParser, type ParseResult } from '../statements/parserClient.js';
-import { detectFormat, gravarLancamentos, motivoRecusa, sanitizeName, tipoPorNome } from '../statements/router.js';
+import {
+  descartarSeDuplicado,
+  detectFormat,
+  gravarLancamentos,
+  motivoRecusa,
+  sanitizeName,
+  sugestoesDoExtrato,
+  tipoPorNome,
+} from '../statements/router.js';
 import { empresasDoLogin, exigirEmpresa } from './acesso.js';
 import { paraExtrato, paraLancamento, STMT_COLS_PORTAL, TXN_COLS_PORTAL } from './formato.js';
 
@@ -64,25 +72,26 @@ function lerLancamentos(admin: SupabaseClient, statementId: string, contexto: st
 portalExtratosRouter.get('/', async (req, res, next) => {
   try {
     const admin = adminDe(req);
-    const { client_id, status, limit } = listStatementsQuerySchema.parse(req.query);
+    const { client_id, status, limit, pagina, por_pagina } = listStatementsQuerySchema.parse(req.query);
     let ids = (await empresasDoLogin(admin, req.auth!.userId)).map((e) => e.id);
     if (client_id) ids = ids.filter((id) => id === client_id);
     if (!ids.length) {
-      res.json({ statements: [] });
+      res.json({ statements: [], total: 0 });
       return;
     }
 
     let q = admin
       .from('statements')
-      .select(`${STMT_COLS_PORTAL}, client:clients(razao_social, cnpj)`)
+      .select(`${STMT_COLS_PORTAL}, client:clients(razao_social, cnpj)`, { count: 'exact' })
       .in('client_id', ids)
       .eq('origem_modulo', 'classificacao')
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .order('id', { ascending: false });
     if (status) q = q.eq('status', status);
-    const { data, error } = await q;
+    const de = pagina ? (pagina - 1) * por_pagina : 0;
+    const { data, error, count } = await (pagina ? q.range(de, de + por_pagina - 1) : q.limit(limit));
     if (error) throw mapPgrstError(error, 'listar os extratos');
-    res.json({ statements: (data ?? []).map((s) => paraExtrato(s)) });
+    res.json({ statements: (data ?? []).map((s) => paraExtrato(s)), total: count ?? (data ?? []).length });
   } catch (err) {
     next(err);
   }
@@ -152,6 +161,14 @@ portalExtratosRouter.post('/classificar', upload.single('file'), async (req, res
       throw parseErr ?? badRequest(msg, { warnings: parsed?.warnings ?? [] });
     }
 
+    // o mesmo extrato já enviado (por ele ou pelo escritório) não entra de novo
+    await descartarSeDuplicado(admin, {
+      clientId: empresa.id,
+      statementId,
+      parsed,
+      storagePath: upErr ? null : path,
+    });
+
     const { statement, transactions } = await gravarLancamentos(admin, {
       ownerId: empresa.owner_id,
       statementId,
@@ -185,6 +202,19 @@ portalExtratosRouter.get('/:id', async (req, res, next) => {
     const extrato = await extratoDoLogin(admin, req.auth!.userId, req.params.id);
     const txns = await lerLancamentos(admin, req.params.id, 'buscar os lançamentos');
     res.json({ statement: paraExtrato(extrato), transactions: txns.map(paraLancamento) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --------------------------------------------------------------------------- #
+// GET /:id/classificacao/sugestoes  — memória pros lançamentos sem classificação
+// --------------------------------------------------------------------------- #
+portalExtratosRouter.get('/:id/classificacao/sugestoes', async (req, res, next) => {
+  try {
+    const admin = adminDe(req);
+    const extrato = await extratoDoLogin(admin, req.auth!.userId, req.params.id);
+    res.json({ sugestoes: await sugestoesDoExtrato(admin, req.params.id, extrato.client_id as string) });
   } catch (err) {
     next(err);
   }

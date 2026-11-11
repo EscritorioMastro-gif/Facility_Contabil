@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiDownload, saveBlob } from '@/lib/api';
 import type {
   ComplementoModo,
@@ -59,6 +59,27 @@ export function useStatements(
     queryFn: () => api<{ statements: Statement[] }>(`/api/statements${qs ? `?${qs}` : ''}`),
     select: (d) => d.statements,
     enabled: opts.enabled ?? true,
+  });
+}
+
+export type FiltroHistorico = {
+  client_id?: string;
+  status?: string;
+  /** tira esse status da lista (Histórico da Importação sem os que ainda estão no Classificação) */
+  exceto_status?: string;
+  origem_modulo?: OrigemModulo;
+};
+
+/** Histórico página a página — todos os extratos ficam acessíveis, sem teto. */
+export function useStatementsPaginados(filter: FiltroHistorico, pagina: number, porPagina: number) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filter)) if (v) params.set(k, v);
+  params.set('pagina', String(pagina));
+  params.set('por_pagina', String(porPagina));
+  return useQuery({
+    queryKey: ['statements', 'pagina', filter, pagina, porPagina],
+    queryFn: () => api<{ statements: Statement[]; total: number }>(`/api/statements?${params}`),
+    placeholderData: keepPreviousData,
   });
 }
 

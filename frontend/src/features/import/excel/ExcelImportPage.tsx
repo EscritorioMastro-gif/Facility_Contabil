@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
+import { duplicado, ErroImportacao } from '@/features/statements/ErroImportacao';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Planilha } from '@/lib/types';
 import { FileDrop } from '@/components/FileDrop';
@@ -224,7 +225,11 @@ export function ExcelImportPage() {
             10.000 lançamentos por importação.
           </p>
         )}
-        {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+        {duplicado(createMut.error) ? (
+          <ErroImportacao err={createMut.error} />
+        ) : (
+          erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>
+        )}
 
         <MapeamentoPlanilha
           planilha={planilha}

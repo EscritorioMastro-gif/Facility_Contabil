@@ -49,7 +49,9 @@ def test_nubank_pdf_bate_com_ofx(nubank_pdf_samples):
     rp = parse_statement("e.pdf", nubank_pdf_samples["pdf"])
     assert _totais(rc) == _totais(ro)
     assert _totais(rp) == _totais(ro), "PDF do Nubank diverge do OFX"
-    assert rp.period_start == ro.period_start and rp.period_end == ro.period_end
+    # período do extrato (parse_statement), igual nos dois formatos
+    rs = parse_statement("e.ofx", nubank_pdf_samples["ofx"])
+    assert rp.period_start == rs.period_start and rp.period_end == rs.period_end
 
 
 def test_c6_xls_protegido_da_erro_claro(c6_encrypted_xls):

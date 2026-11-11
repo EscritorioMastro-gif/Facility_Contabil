@@ -10,64 +10,11 @@
  * (documentos@ e gabriel@) com 2 clientes cada, liberações de acesso feitas
  * pelo gabriel@, e um login de cliente (portal).
  */
-import { readdirSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
+import { bancoComMigrations, como, contar, lerMigration } from '../test/pglite.js';
 
-const PASTA = fileURLToPath(new URL('../../../supabase/migrations/', import.meta.url));
-const MIGRATIONS = readdirSync(PASTA).filter((f) => f.endsWith('.sql')).sort();
 const ESCRITORIO_UNICO = '0022_escritorio_unico.sql';
-const lerMigration = (f: string) =>
-  // pgcrypto não existe no PGlite; gen_random_uuid() já é nativo do Postgres
-  readFileSync(PASTA + f, 'utf8').replace(/create extension[^;]*;/gi, '');
-
-const SUPABASE_MINIMO = `
-  create role anon nologin;
-  create role authenticated nologin;
-  create role service_role nologin bypassrls;
-  grant usage on schema public to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
-
-  create schema auth;
-  create table auth.users (
-    id uuid primary key,
-    email text,
-    raw_app_meta_data jsonb not null default '{}'::jsonb,
-    raw_user_meta_data jsonb not null default '{}'::jsonb,
-    created_at timestamptz not null default now()
-  );
-  create function auth.uid() returns uuid language sql stable as $$
-    select nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub', '')::uuid
-  $$;
-  create function auth.jwt() returns jsonb language sql stable as $$
-    select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-  $$;
-  grant usage on schema auth to anon, authenticated, service_role;
-  grant execute on all functions in schema auth to anon, authenticated, service_role;
-
-  create schema storage;
-  create table storage.buckets (id text primary key, name text not null, public boolean not null default false);
-  create table storage.objects (
-    id uuid primary key default gen_random_uuid(),
-    bucket_id text references storage.buckets (id),
-    name text not null,
-    owner uuid,
-    created_at timestamptz not null default now()
-  );
-  alter table storage.objects enable row level security;
-  create function storage.foldername(name text) returns text[] language plpgsql immutable as $$
-  declare _parts text[];
-  begin
-    select string_to_array(name, '/') into _parts;
-    return _parts[1:array_length(_parts, 1) - 1];
-  end $$;
-  grant usage on schema storage to anon, authenticated, service_role;
-  grant all on storage.objects, storage.buckets to anon, authenticated, service_role;
-  grant execute on function storage.foldername(text) to anon, authenticated, service_role;
-`;
 
 const DOC = '11111111-1111-1111-1111-111111111111'; // documentos@ — 1º login (conta principal)
 const GAB = '22222222-2222-2222-2222-222222222222'; // gabriel@ — 2º login do escritório
@@ -100,30 +47,6 @@ const ANTES_DA_0022 = `
   insert into storage.objects (bucket_id, name) values
     ('statements', '${GAB}/${S_BELLA}/agosto.ofx');
 `;
-
-async function bancoComMigrations(ate: string): Promise<PGlite> {
-  const db = new PGlite();
-  await db.exec(SUPABASE_MINIMO);
-  for (const f of MIGRATIONS.filter((m) => m < ate)) await db.exec(lerMigration(f));
-  return db;
-}
-
-/** Roda `fn` como o login `sub` (null = anônimo), como o PostgREST faz. */
-async function como<T>(db: PGlite, sub: string | null, fn: () => Promise<T>, papel?: string): Promise<T> {
-  const claims = sub
-    ? JSON.stringify({ sub, role: 'authenticated', aud: 'authenticated', app_metadata: papel ? { papel } : {} })
-    : '';
-  await db.exec(`set role ${sub ? 'authenticated' : 'anon'}`);
-  await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);
-  try {
-    return await fn();
-  } finally {
-    await db.exec('reset role');
-    await db.query(`select set_config('request.jwt.claims', '', false)`);
-  }
-}
-
-const contar = async (db: PGlite, sql: string) => Number((await db.query<{ n: number }>(sql)).rows[0]!.n);
 
 describe('escritório único (0022) — regras de acesso num Postgres de verdade', () => {
   let db: PGlite;

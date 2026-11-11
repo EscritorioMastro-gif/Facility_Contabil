@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import multer from 'multer';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { LIMITE_LINHAS, lerTodas, mapPgrstError } from '../lib/pgrst.js';
-import { badRequest, notFound } from '../lib/httpError.js';
+import { LIMITE_LINHAS, emLotes, lerTodas, mapPgrstError } from '../lib/pgrst.js';
+import { badRequest, HttpError, notFound } from '../lib/httpError.js';
 import { logger } from '../lib/logger.js';
 import { escritorioDe } from '../lib/escritorio.js';
 import {
@@ -20,6 +20,8 @@ import {
 import { callParser, callParserExcel, lerPlanilha, type ParseResult } from './parserClient.js';
 import { classify, memoryKey, type Rule } from '../rules/match.js';
 import { buildDominioFile, ExportError, type ExportLancamento } from '../dominio/exporter.js';
+import { sugerirClassificacoes } from '../classificacoes/memoria.js';
+import { impressaoDoExtrato, recusarDuplicado } from './impressao.js';
 import type { ComplementoModo } from '../dominio/complemento.js';
 
 const upload = multer({
@@ -31,7 +33,7 @@ const BUCKET = 'statements';
 const STMT_COLS =
   'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at';
 const TXN_COLS =
-  'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id';
+  'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id, classificacao_origem';
 
 /** Soma líquida (em centavos) de TODOS os lançamentos — inativados inclusos. */
 function movimentoCents(txns: Array<{ direction: string; valor: string | number }>): number {
@@ -126,6 +128,36 @@ function buildTotais(txns: ParseResult['transactions']) {
   };
 }
 
+/** Lançamentos por insert (o mesmo tamanho de página das leituras). */
+const LOTE_GRAVACAO = 1000;
+
+/**
+ * Trava de extrato duplicado: os mesmos lançamentos já estão em outro extrato
+ * da empresa → apaga o extrato que acabou de ser criado (e o arquivo) e
+ * devolve o 409 dizendo onde está o original.
+ */
+export async function descartarSeDuplicado(
+  supabase: SupabaseClient,
+  p: { clientId: string; statementId: string; parsed: ParseResult; storagePath: string | null },
+): Promise<void> {
+  try {
+    await recusarDuplicado(supabase, {
+      clientId: p.clientId,
+      impressao: impressaoDoExtrato(p.parsed.transactions),
+      excetoId: p.statementId,
+    });
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 409) {
+      if (p.storagePath) {
+        const { error } = await supabase.storage.from(BUCKET).remove([p.storagePath]);
+        if (error) logger.warn({ error }, 'falha ao apagar o arquivo do extrato duplicado');
+      }
+      await supabase.from('statements').delete().eq('id', p.statementId);
+    }
+    throw err;
+  }
+}
+
 /**
  * Classifica os lançamentos lidos (memória do cliente), grava na `transactions`
  * e finaliza o `statement` (período, totais, saldo_final, status final dado).
@@ -168,8 +200,19 @@ export async function gravarLancamentos(
     logger.warn({ err }, 'falha ao ler memórias (segue sem pré-preencher)');
   }
 
+  // módulo Classificação: descrição já classificada antes na empresa vem classificada
+  const sugestao =
+    p.statusFinal === 'classificacao'
+      ? await sugerirClassificacoes(supabase, {
+          clientId: p.clientId,
+          lancamentos: p.parsed.transactions.map((t) => ({ direction: t.direction, descricao: t.description })),
+          excetoExtrato: p.statementId,
+        })
+      : () => null;
+
   const rows = p.parsed.transactions.map((t, i) => {
     const m = classify(rules, { direction: t.direction, description: t.description });
+    const s = sugestao({ direction: t.direction, descricao: t.description });
     const histPadrao = t.direction === 'entrada' ? p.histEntrada : p.histSaida;
     return {
       owner_id: p.ownerId,
@@ -185,11 +228,16 @@ export async function gravarLancamentos(
       cod_complemento_hist: '0',
       regra_id: m?.rule.id ?? null,
       origem_preenchimento: m?.origem ?? 'vazio',
+      classificacao_id: s?.classificacao_id ?? null,
+      classificacao_origem: s?.origem ?? null,
       raw: t.raw ?? {},
     };
   });
-  const { error: tErr } = await supabase.from('transactions').insert(rows);
-  if (tErr) throw mapPgrstError(tErr, 'gravar lançamentos');
+  // em lotes: extrato de 8.000 lançamentos num pedido só fica pesado pro banco
+  for (const lote of emLotes(rows, LOTE_GRAVACAO)) {
+    const { error: tErr } = await supabase.from('transactions').insert(lote);
+    if (tErr) throw mapPgrstError(tErr, 'gravar lançamentos');
+  }
 
   const totais = buildTotais(p.parsed.transactions);
   const saldoFinal =
@@ -209,6 +257,7 @@ export async function gravarLancamentos(
       conta_ofx: p.parsed.account_id,
       totais,
       saldo_final: saldoFinal,
+      impressao: impressaoDoExtrato(p.parsed.transactions),
     })
     .eq('id', p.statementId)
     .select(STMT_COLS)
@@ -306,6 +355,13 @@ async function novaImportacao(
     await supabase.from('statements').update({ status: 'erro', erro_msg: msg }).eq('id', statementId);
     throw parseErr ?? badRequest(msg, { warnings: parsed?.warnings ?? [] });
   }
+
+  await descartarSeDuplicado(supabase, {
+    clientId: dto.client_id,
+    statementId,
+    parsed,
+    storagePath: upErr ? null : path,
+  });
 
   const { statement, transactions } = await gravarLancamentos(supabase, {
     ownerId: escritorioId,
@@ -497,6 +553,13 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
       return;
     }
 
+    await descartarSeDuplicado(supabase, {
+      clientId: dto.client_id,
+      statementId,
+      parsed,
+      storagePath: upErr ? null : path,
+    });
+
     const { statement, transactions } = await gravarLancamentos(supabase, {
       ownerId: escritorioId,
       statementId,
@@ -552,12 +615,6 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     // continua lá; só quem já foi puxado pra Importação (revisao) permanece assim.
     const statusFinal = stmt.status === 'classificacao' ? 'classificacao' : 'revisao';
 
-    const path = `${escritorioId}/${statementId}/${sanitizeName(req.file.originalname)}`;
-    const { error: upErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
-    if (upErr) logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
-
     let parsed: ParseResult | null = null;
     let parseErr: unknown = null;
     try {
@@ -576,6 +633,20 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
       next(parseErr ?? badRequest(msg, { warnings: parsed?.warnings ?? [] }));
       return;
     }
+
+    // o arquivo novo é igual a OUTRO extrato da empresa? Recusa sem mexer neste
+    // (nem no arquivo guardado). Igual a ele mesmo pode: é trocar pelo mesmo.
+    await recusarDuplicado(supabase, {
+      clientId: stmt.client_id,
+      impressao: impressaoDoExtrato(parsed.transactions),
+      excetoId: statementId,
+    });
+
+    const path = `${escritorioId}/${statementId}/${sanitizeName(req.file.originalname)}`;
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(path, req.file.buffer, { contentType: tipoPorNome(req.file.originalname), upsert: true });
+    if (upErr) logger.warn({ upErr }, 'falha ao subir arquivo no storage (segue mesmo assim)');
 
     // fora com os lançamentos antigos
     const { error: dErr } = await supabase
@@ -609,18 +680,22 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
 // --------------------------------------------------------------------------- #
 statementsRouter.get('/', async (req, res, next) => {
   try {
-    const { client_id, status, origem_modulo, limit } = listStatementsQuerySchema.parse(req.query);
+    const { client_id, status, exceto_status, origem_modulo, limit, pagina, por_pagina } =
+      listStatementsQuerySchema.parse(req.query);
     let q = db(req)
       .from('statements')
-      .select(`${STMT_COLS}, client:clients(razao_social, cnpj, dominio_code)`)
+      .select(`${STMT_COLS}, client:clients(razao_social, cnpj, dominio_code)`, { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(limit);
+      .order('id', { ascending: false });
     if (client_id) q = q.eq('client_id', client_id);
     if (status) q = q.eq('status', status);
+    if (exceto_status) q = q.neq('status', exceto_status);
     if (origem_modulo) q = q.eq('origem_modulo', origem_modulo);
-    const { data, error } = await q;
+    // Histórico: página a página, sem teto de quantos extratos aparecem
+    const de = pagina ? (pagina - 1) * por_pagina : 0;
+    const { data, error, count } = await (pagina ? q.range(de, de + por_pagina - 1) : q.limit(limit));
     if (error) throw mapPgrstError(error, 'listar importações');
-    res.json({ statements: data ?? [] });
+    res.json({ statements: data ?? [], total: count ?? (data ?? []).length });
   } catch (err) {
     next(err);
   }
@@ -840,6 +915,48 @@ statementsRouter.patch('/:id/transactions', async (req, res, next) => {
     if (sErr) throw mapPgrstError(sErr, 'atualizar totais');
 
     res.json({ statement: stmt, transactions: txns, updated: affected });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --------------------------------------------------------------------------- #
+// GET /:id/classificacao/sugestoes  — o que a memória sugere pros lançamentos
+// ainda sem classificação (extrato importado antes de o mês anterior ser
+// classificado). Não grava: a tela põe no rascunho e o operador salva.
+// --------------------------------------------------------------------------- #
+type Pendente = { id: string; direction: string; descricao_raw: string | null; classificacao_id: string | null; ignorado: boolean };
+
+export async function sugestoesDoExtrato(supabase: SupabaseClient, statementId: string, clientId: string) {
+  const txns = await lerTodas<Pendente>(
+    (de, ate) =>
+      supabase
+        .from('transactions')
+        .select('id, direction, descricao_raw, classificacao_id, ignorado')
+        .eq('statement_id', statementId)
+        .order('ordem')
+        .range(de, ate),
+    'buscar lançamentos',
+  );
+  const pendentes = txns.filter((t) => !t.classificacao_id && !t.ignorado);
+  const sugestao = await sugerirClassificacoes(supabase, {
+    clientId,
+    lancamentos: pendentes.map((t) => ({ direction: t.direction, descricao: t.descricao_raw ?? '' })),
+    excetoExtrato: statementId,
+  });
+  return pendentes.flatMap((t) => {
+    const s = sugestao({ direction: t.direction, descricao: t.descricao_raw ?? '' });
+    return s ? [{ id: t.id, classificacao_id: s.classificacao_id, origem: s.origem }] : [];
+  });
+}
+
+statementsRouter.get('/:id/classificacao/sugestoes', async (req, res, next) => {
+  try {
+    const supabase = db(req);
+    const { data: stmt, error } = await supabase.from('statements').select('id, client_id').eq('id', req.params.id).maybeSingle();
+    if (error) throw mapPgrstError(error, 'buscar importação');
+    if (!stmt) throw notFound('Importação não encontrada');
+    res.json({ sugestoes: await sugestoesDoExtrato(supabase, stmt.id as string, stmt.client_id as string) });
   } catch (err) {
     next(err);
   }

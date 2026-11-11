@@ -10,6 +10,7 @@ import { porPapel } from '../routes/papel.js';
 import { portalClientesRouter } from './clientes.js';
 import { portalExtratosRouter } from './extratos.js';
 import { portalClassificacoesRouter } from './classificacoes.js';
+import { impressaoDoExtrato } from '../statements/impressao.js';
 
 const mockedParser = vi.mocked(callParser);
 
@@ -87,6 +88,14 @@ const LANCAMENTO = {
 const CLASSIF_A = { id: '0c0c0c0c-0000-4000-8000-00000000000a', client_id: EMP_A, direction: 'saida', nome: 'AGUA', ativo: true };
 const CLASSIF_X = { id: '0c0c0c0c-0000-4000-8000-00000000000b', client_id: EMP_X, direction: 'saida', nome: 'LUZ', ativo: true };
 
+const GERAL_ENERGIA = '0e0e0e0e-0000-4000-8000-000000000001';
+const GERAIS = [
+  { id: GERAL_ENERGIA, owner_id: ESCRITORIO, direction: 'saida', nome: 'ENERGIA ELÉTRICA' },
+  { id: '0e0e0e0e-0000-4000-8000-000000000002', owner_id: 'outro-escritorio', direction: 'saida', nome: 'DE OUTRO' },
+];
+/** Impressão dos lançamentos lidos que já existe em outro extrato da empresa (ver statements/impressao.ts). */
+let IMPRESSAO_REPETIDA = '';
+
 const filtro = (op: FakeOp, col: string) => op.filters.find(([c]) => c === col)?.[1];
 
 /** Banco falso com a regra que importa: acessos, empresas ativas, extratos e classificações. */
@@ -112,6 +121,9 @@ function banco(op: FakeOp) {
         return { data: { ...extrato('st-novo', EMP_A, 'classificacao'), ...(op.payload as object) }, error: null };
       }
       if (op.verb === 'delete') return { data: null, error: null };
+      // trava de duplicado: extrato com os mesmos lançamentos
+      const impressao = filtro(op, 'impressao');
+      if (impressao) return { data: impressao === IMPRESSAO_REPETIDA ? [EXTRATOS[ST_A]] : [], error: null };
       const id = filtro(op, 'id') as string | undefined;
       if (id) return { data: EXTRATOS[id] ?? null, error: null };
       const ids = filtro(op, 'client_id') as string[];
@@ -121,9 +133,18 @@ function banco(op: FakeOp) {
       if (op.verb === 'insert') return { data: null, error: null };
       if (op.verb === 'select' && op.single === undefined && !op.range) return { data: null, error: null, count: 0 };
       return { data: [LANCAMENTO], error: null };
+    case 'classificacoes_gerais': {
+      const ids = filtro(op, 'id') as string[] | undefined;
+      const dono = filtro(op, 'owner_id');
+      const donos = Array.isArray(dono) ? dono : [dono];
+      return {
+        data: GERAIS.filter((g) => donos.includes(g.owner_id) && (!ids || ids.includes(g.id))),
+        error: null,
+      };
+    }
     case 'classificacoes': {
       const todas = [CLASSIF_A, CLASSIF_X];
-      if (op.verb === 'insert') return { data: { id: 'cl-novo', ...(op.payload as object) }, error: null };
+      if (op.verb === 'insert' || op.verb === 'upsert') return { data: null, error: null };
       if (op.verb === 'delete') return { data: null, error: null };
       const id = filtro(op, 'id');
       if (Array.isArray(id)) return { data: todas.filter((c) => id.includes(c.id)), error: null };
@@ -280,6 +301,34 @@ describe('portal do cliente — extratos', () => {
     expect(res.body.statement).toMatchObject({ status: 'classificacao', banco_conta_contabil: null });
   });
 
+  it('o mesmo extrato enviado de novo é recusado e o que acabou de ser criado é apagado', async () => {
+    const lidos = [{ date: '2026-09-02', description: 'PIX', amount_cents: 1000, direction: 'saida' as const, raw: {} }];
+    mockedParser.mockResolvedValue({
+      format: 'ofx',
+      bank_id: null,
+      account_id: null,
+      period_start: '2026-09-01',
+      period_end: '2026-09-30',
+      warnings: [],
+      transactions: lidos,
+    });
+    IMPRESSAO_REPETIDA = impressaoDoExtrato(lidos);
+    try {
+      const { app, ops, storageOps } = appCliente();
+      const res = await request(app)
+        .post('/statements/classificar')
+        .field('client_id', EMP_A)
+        .attach('file', Buffer.from('<OFX></OFX>'), 'set-de-novo.ofx');
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/já foi importado: "extrato\.ofx", de 01\/09\/2026 a 30\/09\/2026/);
+      expect(ops.some((o) => o.table === 'transactions' && o.verb === 'insert')).toBe(false);
+      expect(ops.find((o) => o.table === 'statements' && o.verb === 'delete')?.filters).toContainEqual(['id', 'st-novo']);
+      expect(storageOps.some((s) => s.action === 'remove')).toBe(true);
+    } finally {
+      IMPRESSAO_REPETIDA = '';
+    }
+  });
+
   it('não envia extrato pra empresa que não é dele (nem cria nada)', async () => {
     const { app, ops } = appCliente();
     const res = await request(app)
@@ -309,19 +358,46 @@ describe('portal do cliente — classificações', () => {
     expect((await request(app).get(`/classificacoes?client_id=${EMP_X}`)).status).toBe(404);
   });
 
-  it('cria no catálogo da empresa, em nome do escritório', async () => {
+  it('não cria classificação avulsa: só escolhe da lista geral', async () => {
     const { app, ops } = appCliente();
     const res = await request(app).post('/classificacoes').send({ client_id: EMP_A, direction: 'saida', nome: 'Energia' });
-    expect(res.status).toBe(201);
-    const payload = ops.find((o) => o.table === 'classificacoes' && o.verb === 'insert')!.payload;
-    expect(payload).toMatchObject({ client_id: EMP_A, owner_id: ESCRITORIO, nome: 'Energia' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/lista geral/i);
+    expect(ops.some((o) => o.verb === 'insert' || o.verb === 'upsert')).toBe(false);
   });
 
-  it('não cria em empresa que não é dele', async () => {
+  it('vê a lista geral do escritório dele (não a de outro), sem poder editar', async () => {
+    const { app } = appCliente();
+    const res = await request(app).get('/classificacoes/gerais?direction=saida');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ gerais: [GERAIS[0]], pode_editar: false });
+  });
+
+  it('escolhe da lista geral: entra na empresa dele, em nome do escritório, ligada ao item', async () => {
     const { app, ops } = appCliente();
-    const res = await request(app).post('/classificacoes').send({ client_id: EMP_X, direction: 'saida', nome: 'Energia' });
-    expect(res.status).toBe(404);
-    expect(ops.some((o) => o.verb === 'insert')).toBe(false);
+    const res = await request(app).post('/classificacoes/da-lista-geral').send({ client_id: EMP_A, geral_ids: [GERAL_ENERGIA] });
+    expect(res.status).toBe(201);
+    const payload = ops.find((o) => o.table === 'classificacoes' && o.verb === 'upsert')!.payload;
+    expect(payload).toEqual([
+      { owner_id: ESCRITORIO, client_id: EMP_A, direction: 'saida', nome: 'ENERGIA ELÉTRICA', geral_id: GERAL_ENERGIA },
+    ]);
+  });
+
+  it('não escolhe pra empresa que não é dele, nem item da lista de outro escritório', async () => {
+    const { app, ops } = appCliente();
+    const outraEmpresa = await request(app).post('/classificacoes/da-lista-geral').send({ client_id: EMP_X, geral_ids: [GERAL_ENERGIA] });
+    expect(outraEmpresa.status).toBe(404);
+    const outroEscritorio = await request(app)
+      .post('/classificacoes/da-lista-geral')
+      .send({ client_id: EMP_A, geral_ids: [GERAIS[1]!.id] });
+    expect(outroEscritorio.status).toBe(400);
+    expect(ops.some((o) => o.verb === 'insert' || o.verb === 'upsert')).toBe(false);
+  });
+
+  it('não renomeia (o nome vem da lista geral)', async () => {
+    const { app } = appCliente();
+    const res = await request(app).patch(`/classificacoes/${CLASSIF_A.id}`).send({ nome: 'OUTRO NOME' });
+    expect(res.status).toBe(403);
   });
 });
 

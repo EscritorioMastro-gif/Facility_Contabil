@@ -7,7 +7,8 @@ export type ModuleDef = {
   description: string;
   home: string;
   match: (pathname: string) => boolean;
-  nav: { to: string; label: string }[];
+  /** soEscritorio: o item não aparece pro login de cliente */
+  nav: { to: string; label: string; soEscritorio?: boolean }[];
   /** só o escritório usa — login de cliente vê com cadeado */
   soEscritorio?: boolean;
 };
@@ -49,6 +50,7 @@ export const MODULES: ModuleDef[] = [
       { to: '/classificacao', label: 'Nova importação' },
       { to: '/classificacao/historico', label: 'Histórico' },
       { to: '/classificacao/categorias', label: 'Classificações' },
+      { to: '/classificacao/lista-geral', label: 'Lista geral', soEscritorio: true },
     ],
   },
 ];
@@ -60,4 +62,9 @@ export function moduleAtPath(pathname: string): ModuleDef | undefined {
 /** O módulo aparece com cadeado pra esse login? */
 export function moduloBloqueado(m: ModuleDef, papel: Papel): boolean {
   return papel === 'cliente' && !!m.soEscritorio;
+}
+
+/** Itens do menu do módulo que esse login vê. */
+export function navDoPapel(m: ModuleDef, papel: Papel): ModuleDef['nav'] {
+  return m.nav.filter((n) => !(n.soEscritorio && papel === 'cliente'));
 }

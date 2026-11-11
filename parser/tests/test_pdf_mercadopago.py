@@ -33,7 +33,12 @@ _PAGINA_2 = [
 ]
 
 
-def _pdf(separadores: bool = True, saldo_linha_4: str = "1.041,38", saldo_final: str = "1.094,13") -> bytes:
+def _pdf(
+    separadores: bool = True,
+    saldo_linha_4: str = "1.041,38",
+    saldo_final: str = "1.094,13",
+    negrito_falso: bool = False,
+) -> bytes:
     from reportlab.pdfgen import canvas
 
     buf = io.BytesIO()
@@ -73,6 +78,8 @@ def _pdf(separadores: bool = True, saldo_linha_4: str = "1.041,38", saldo_final:
     txt(175.3, 158.8, "DETALHE DOS MOVIMENTOS")
     for x, s in ((40.5, "Data"), (88.9, "Descrição"), (197.6, "ID da operação"), (312.3, "Valor"), (383.8, "Saldo")):
         txt(x, 184.6, s)
+        if negrito_falso:  # extrato de 09/2026: título escrito 2x no mesmo lugar -> "DDaattaa"
+            txt(x + 0.3, 184.6, s)
     sep(201.3)
     topo = 202.0
     for i, (data, linhas, ident, valor, saldo) in enumerate(_PAGINA_1):
@@ -125,6 +132,24 @@ def test_le_cada_lancamento_inteiro_com_sinal_certo():
     assert r.transactions[5].raw["id_operacao"] == "100000000002"  # estorno com o ID da venda
     assert [t.raw["ordem"] for t in r.transactions] == list(range(7))
     assert _avisos_de_saldo(r) == []  # saldo linha a linha e saldo final batem
+
+
+def test_cabecalho_em_negrito_falso_nao_some_com_a_primeira_pagina():
+    # Extrato real de 09/2026: o cabeçalho da 1ª página vinha com as letras
+    # repetidas ("DDaattaa", "IIDD"), a tabela não era achada e a página inteira
+    # (23 lançamentos, R$ 418,45 de entradas) ficava de fora sem aviso.
+    r = parse_pdf(_pdf(negrito_falso=True))
+    got = [(t.date, t.direction, t.amount_cents, t.description) for t in r.transactions]
+    assert got == _ESPERADO
+    assert _avisos_de_saldo(r) == []
+
+
+def test_periodo_impresso_pelo_mercado_pago():
+    from app.parsers import parse_statement
+
+    r = parse_statement("extrato.pdf", _pdf())
+    assert (r.declared_start, r.declared_end) == ("2026-08-01", "2026-08-31")  # "De 01-08-2026 al 31-08-2026"
+    assert (r.period_start, r.period_end) == ("2026-08-01", "2026-08-31")
 
 
 def test_saldo_que_nao_fecha_vira_aviso():

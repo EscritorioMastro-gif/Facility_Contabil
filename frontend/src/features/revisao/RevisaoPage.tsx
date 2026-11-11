@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Paginacao, usePaginacao } from '@/components/Paginacao';
+import { TabelaRolavel } from '@/components/TabelaRolavel';
 import { ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
@@ -81,6 +83,8 @@ export function RevisaoPage() {
       return !d.ignorado && t.direction === filter;
     });
   }, [transactions, get, filter]);
+
+  const pag = usePaginacao(shown, 'revisao', filter);
 
   if (isLoading) return <p className="text-sm text-slate-400">Carregando…</p>;
   if (error || !data)
@@ -230,9 +234,18 @@ export function RevisaoPage() {
         ))}
       </div>
 
-      <div className="card overflow-x-auto">
+      <Paginacao
+        pagina={pag.pagina}
+        paginas={pag.paginas}
+        porPagina={pag.porPagina}
+        total={pag.total}
+        onPagina={pag.setPagina}
+        onPorPagina={pag.setPorPagina}
+      />
+
+      <TabelaRolavel>
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase text-slate-500">
+          <thead className="text-left text-[10px] uppercase text-slate-500">
             <tr>
               <th className="px-2 py-2">Inativar</th>
               <th className="px-2 py-2">Data</th>
@@ -248,7 +261,7 @@ export function RevisaoPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {shown.map((txn: Transaction) => (
+            {pag.daPagina.map((txn: Transaction) => (
               <TransactionRow
                 key={txn.id}
                 txn={txn}
@@ -263,7 +276,16 @@ export function RevisaoPage() {
         {shown.length === 0 && (
           <p className="p-6 text-sm text-slate-400">Nenhum lançamento neste filtro.</p>
         )}
-      </div>
+      </TabelaRolavel>
+
+      <Paginacao
+        pagina={pag.pagina}
+        paginas={pag.paginas}
+        porPagina={pag.porPagina}
+        total={pag.total}
+        onPagina={pag.setPagina}
+        onPorPagina={pag.setPorPagina}
+      />
 
       {gerarErr && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{gerarErr}</p>

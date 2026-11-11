@@ -78,6 +78,11 @@ export const listStatementsQuerySchema = z.object({
   status: z.enum(['parsing', 'classificacao', 'revisao', 'gerado', 'erro']).optional(),
   origem_modulo: z.enum(['importacao', 'classificacao']).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  /** tira um status da lista (Histórico da Importação: sem os que ainda estão no Classificação) */
+  exceto_status: z.enum(['parsing', 'classificacao', 'revisao', 'gerado', 'erro']).optional(),
+  /** Histórico paginado (1 = primeira página); sem `pagina`, vale o `limit`. */
+  pagina: z.coerce.number().int().min(1).optional(),
+  por_pagina: z.coerce.number().int().min(1).max(200).default(50),
 });
 
 export const updateStatementSchema = z.object({

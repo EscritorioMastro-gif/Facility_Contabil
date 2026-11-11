@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { Paginacao, usePaginacao } from '@/components/Paginacao';
+import { TabelaRolavel } from '@/components/TabelaRolavel';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Planilha } from '@/lib/types';
 import {
@@ -12,8 +14,6 @@ import {
 } from './planilha';
 
 type Filtro = 'todas' | 'entram' | 'fora';
-
-const PAGINA = 100;
 
 /**
  * A planilha como está no Excel, com a escolha da função de cada coluna em
@@ -36,7 +36,6 @@ export function MapeamentoPlanilha({
   onInverter: (n: number) => void;
 }) {
   const [filtro, setFiltro] = useState<Filtro>('todas');
-  const [limite, setLimite] = useState(PAGINA);
 
   const cols = useMemo(() => Array.from({ length: planilha.colunas }, (_, i) => i), [planilha.colunas]);
   const celulas = useMemo(() => new Map(planilha.linhas.map((l) => [l.n, l.c])), [planilha.linhas]);
@@ -52,11 +51,11 @@ export function MapeamentoPlanilha({
         : linhas.filter((l) => (filtro === 'entram') === dentro.has(l.n)),
     [linhas, filtro, dentro, lendo],
   );
-  const mostradas = filtradas.slice(0, limite);
+  const pag = usePaginacao(filtradas, 'planilha', filtro);
+  const mostradas = pag.daPagina;
 
   function filtrar(f: Filtro) {
     setFiltro(f);
-    setLimite(PAGINA);
   }
 
   if (!planilha.linhas.length) {
@@ -81,9 +80,21 @@ export function MapeamentoPlanilha({
         </div>
       )}
 
-      <div className="card overflow-x-auto">
+      <Paginacao
+        pagina={pag.pagina}
+        paginas={pag.paginas}
+        porPagina={pag.porPagina}
+        total={pag.total}
+        onPagina={pag.setPagina}
+        onPorPagina={pag.setPorPagina}
+        rotulo="linhas"
+      />
+
+      {/* rolagem dentro da tabela: a barra pra passar pro lado fica sempre à vista,
+          e a escolha das colunas (no cabeçalho) acompanha a descida */}
+      <TabelaRolavel>
         <table className="w-full text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+          <thead className="text-left text-xs text-slate-500">
             <tr>
               <th className="w-8 px-3 py-2" />
               <th className="px-2 py-2 text-right font-medium">Linha</th>
@@ -91,7 +102,7 @@ export function MapeamentoPlanilha({
               {cols.map((i) => {
                 const f = funcaoDa(colunas, i);
                 return (
-                  <th key={i} className={`px-2 py-2 align-bottom ${f ? 'bg-brand-100' : ''}`}>
+                  <th key={i} className={`px-2 py-2 align-bottom ${f ? '!bg-brand-100' : ''}`}>
                     <div className="mb-1 font-semibold text-slate-600">Coluna {letraColuna(i)}</div>
                     <select
                       aria-label={`Função da coluna ${letraColuna(i)}`}
@@ -144,15 +155,17 @@ export function MapeamentoPlanilha({
             })}
           </tbody>
         </table>
-        {filtradas.length > mostradas.length && (
-          <div className="flex items-center gap-3 border-t border-slate-200 px-4 py-2 text-sm text-slate-500">
-            Mostrando {mostradas.length} de {filtradas.length} linhas.
-            <button className="font-medium text-brand-600 hover:underline" onClick={() => setLimite((n) => n + PAGINA)}>
-              Mostrar mais {Math.min(PAGINA, filtradas.length - mostradas.length)}
-            </button>
-          </div>
-        )}
-      </div>
+      </TabelaRolavel>
+
+      <Paginacao
+        pagina={pag.pagina}
+        paginas={pag.paginas}
+        porPagina={pag.porPagina}
+        total={pag.total}
+        onPagina={pag.setPagina}
+        onPorPagina={pag.setPorPagina}
+        rotulo="linhas"
+      />
     </div>
   );
 }

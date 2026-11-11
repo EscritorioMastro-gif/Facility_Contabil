@@ -1,7 +1,7 @@
 import type { ComponentType, SVGProps } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
-import { MODULES, moduleAtPath, moduloBloqueado } from '@/lib/modules';
+import { MODULES, moduleAtPath, moduloBloqueado, navDoPapel } from '@/lib/modules';
 import { IconCadastros, IconCadeado, IconClassificacao, IconImportacao, IconLogout } from './icons';
 
 const MODULE_ICON: Record<string, ComponentType<SVGProps<SVGSVGElement>>> = {
@@ -70,9 +70,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                 {m.label}
               </Link>
 
-              {isActive && m.nav.length > 1 && (
+              {isActive && navDoPapel(m, papel).length > 1 && (
                 <div className="mb-1 mt-0.5 space-y-0.5 pb-1 pl-[38px] pr-1">
-                  {m.nav.map((n) => (
+                  {navDoPapel(m, papel).map((n) => (
                     <NavLink
                       key={n.to}
                       to={n.to}

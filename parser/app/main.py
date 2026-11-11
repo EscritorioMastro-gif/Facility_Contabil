@@ -14,6 +14,7 @@ from .parsers import (
     NotAStatementError,
     PlanilhaInvalidaError,
     UnsupportedFormatError,
+    com_periodo_do_extrato,
     ler_planilha,
     parse_planilha,
     parse_statement,
@@ -143,7 +144,8 @@ async def parse_excel(
     content = await _ler_upload(file)
     filename = file.filename or "planilha"
     try:
-        result = parse_planilha(content, mapa)
+        # período = meses inteiros dos lançamentos (ou o que vier no nome do arquivo)
+        result = com_periodo_do_extrato(parse_planilha(content, mapa), filename)
     except (EncryptedFileError, PlanilhaInvalidaError) as exc:
         return _erro_planilha(exc)
     except ArquivoPesadoError as exc:

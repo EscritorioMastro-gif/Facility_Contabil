@@ -111,6 +111,9 @@ def parse_ofx(content: bytes) -> ParseResult:
         account_id=account_id,
         period_start=dt_start.isoformat() if dt_start else None,
         period_end=dt_end.isoformat() if dt_end else None,
+        # parse_statement usa se contiver todos os lançamentos (ver periodo.py)
+        declared_start=declared_start.isoformat() if declared_start else None,
+        declared_end=declared_end.isoformat() if declared_end else None,
         transactions=txns,
         warnings=warnings,
     )

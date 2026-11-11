@@ -20,8 +20,16 @@ class ParseResult(BaseModel):
     format: FileFormat
     bank_id: str | None = None
     account_id: str | None = None
-    period_start: str | None = None
-    period_end: str | None = None
+    period_start: str | None = Field(
+        default=None,
+        description="Início do período do extrato: o impresso pelo banco, senão o 1º dia do mês do 1º lançamento",
+    )
+    period_end: str | None = Field(
+        default=None,
+        description="Fim do período do extrato: o impresso pelo banco, senão o último dia do mês do último lançamento",
+    )
+    declared_start: str | None = Field(default=None, description="Início do período impresso no extrato, se houver")
+    declared_end: str | None = Field(default=None, description="Fim do período impresso no extrato, se houver")
     transactions: list[NormalizedTransaction] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
 

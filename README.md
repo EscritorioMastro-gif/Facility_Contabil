@@ -52,15 +52,31 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
 ## Fluxo — Classificação
 
 1. Escolhe o cliente e sobe o extrato (mesmo parser da Importação) — aqui não
-   pede conta do banco nem código de histórico, só o essencial pra ler.
-2. Classifica cada lançamento por categoria (não por conta contábil) usando um
-   catálogo próprio do cliente — cria categoria nova direto na tela ("+ nova
-   classificação…"), em massa por entrada/saída. As categorias e as
-   classificações de cada lançamento ficam salvas e valem pra qualquer mês.
-   Uma categoria **em uso não pode ser excluída** (só desativada).
+   pede conta do banco nem código de histórico, só o essencial pra ler. O
+   **mesmo extrato não entra duas vezes** (nem em outro formato, nem pelo outro
+   módulo): mesmos lançamentos (data, valor e tipo) da mesma empresa = recusado,
+   com o atalho pro extrato que já está lá (`statements.impressao`, migration
+   `0023`). O período no topo é o **do extrato** (o impresso pelo banco ou o do
+   nome do arquivo; senão o mês inteiro dos lançamentos).
+2. Classifica cada lançamento por categoria (não por conta contábil) usando a
+   **lista própria** do cliente, escolhida da **Lista geral** do escritório
+   (Classificação → Lista geral; só quem administra a equipe inclui/exclui).
+   Em **Ações em massa**: "Adicionar classificações de entradas/saídas" (da
+   lista geral), "Preencher pela memória" e classificar em massa. A lista
+   própria é a **mesma em todas as empresas do mesmo login de cliente**.
+   Classificação avulsa (fora da lista geral) só o escritório cria.
+   **Memória**: descrição já classificada antes na empresa vem classificada no
+   extrato novo ("memória"); se já teve classificações diferentes, vem a mais
+   usada marcada como **sugestão** pra conferir. No campo da classificação,
+   **Enter** desce pro lançamento de baixo (Shift+Enter sobe). Tirar uma
+   categoria da lista exclui onde não está em uso e só desativa onde está.
 3. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
    códigos de histórico e o lote, e o mesmo registro segue pro fluxo normal de
    Revisão/exportação (sem duplicar o extrato).
+
+As tabelas de lançamentos (Revisão, Classificação, planilha Excel, Histórico)
+mostram 10, 50 ou 100 itens por página (a escolha fica guardada) e rolam por
+dentro — a barra pra passar pro lado fica sempre à vista.
 
 ## Acesso do cliente
 
@@ -74,8 +90,9 @@ remover.
   guarda só o hash. Esqueceu? **Esqueci minha senha** na tela de entrada.
 - O login é o **e-mail** do cliente. O mesmo e-mail pode ser liberado em
   **várias empresas** (mesmo login, escolhe a empresa dentro do módulo).
-- Ele vê **só o módulo Classificação**: enviar extrato, classificar, criar
-  categorias, histórico. **Cadastros** e **Importação** aparecem com cadeado.
+- Ele vê **só o módulo Classificação**: enviar extrato, classificar, montar a
+  lista própria a partir da lista geral do escritório, histórico. **Cadastros**
+  e **Importação** aparecem com cadeado.
 - Depois que o escritório **puxa** o extrato pra Importação, ele fica **só pra
   consulta** pro cliente (e ele não pode mais excluí-lo).
 - Nada da parte contábil aparece pro cliente (código no Domínio, conta do
@@ -137,7 +154,7 @@ Auditoria de 2026-10-06. O que o sistema faz sozinho:
 - **Abuso**: limite de requisições por IP, de envio de arquivo e de convites
   por login (`backend/src/middleware/limite.ts`); corpo JSON só lido depois do
   login (1 MB; 10 MB na revisão); upload até 25 MB; o leitor recusa sem o
-  segredo **antes** de receber o arquivo, PDF acima de 500 páginas e planilha
+  segredo **antes** de receber o arquivo, PDF acima de 1.200 páginas e planilha
   "bomba" (zip que abre gigante).
 - **Cabeçalhos**: CSP na tela (só script do próprio site; só conversa com a API
   e o Supabase), anti-iframe, `no-store` nas respostas da API, sem
@@ -290,8 +307,10 @@ caminho não existe (não quebra em outra máquina).
   cliente (migration 0018). Segue o fluxo normal da Importação.
 
 **Módulo Contábil (C1–C11)** — **retirado do sistema em 2026-10-06** (tela,
-API, leitores de plano de contas/balancete e relatórios em PDF); a migration
-`0019` apaga as tabelas dele, só se estiverem vazias. O histórico do que ele
+API, leitores de plano de contas/balancete e relatórios em PDF). As tabelas
+dele já saíram do banco e as migrations dele (0009–0016, 0019) saíram do
+repositório em 2026-11-11; a `0024` apaga o que sobrar delas em qualquer banco,
+junto com `chart_accounts` (nunca usada), só se estiverem vazias. O histórico do que ele
 fazia fica em [`docs/roadmap.md`](docs/roadmap.md).
 
 **Milestone 8 (deploy)** — no ar pelo Render desde 2026-10-06; ver

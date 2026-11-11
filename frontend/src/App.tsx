@@ -14,6 +14,7 @@ import { ClassificarPage } from '@/features/classificacao/ClassificarPage';
 import { ClassificacaoRevisaoPage } from '@/features/classificacao/ClassificacaoRevisaoPage';
 import { ClassificacaoHistoricoPage } from '@/features/classificacao/ClassificacaoHistoricoPage';
 import { CategoriasPage } from '@/features/classificacao/CategoriasPage';
+import { ListaGeralPage } from '@/features/classificacao/ListaGeralPage';
 import { EquipePage } from '@/features/equipe/EquipePage';
 
 export function App() {
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/classificacao/revisao/:id" element={<ClassificacaoRevisaoPage />} />
         <Route path="/classificacao/historico" element={<ClassificacaoHistoricoPage />} />
         <Route path="/classificacao/categorias" element={<CategoriasPage />} />
+        <Route path="/classificacao/lista-geral" element={<SoEscritorio><ListaGeralPage /></SoEscritorio>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

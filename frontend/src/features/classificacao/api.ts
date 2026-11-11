@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Classificacao, Direction, Transaction } from '@/lib/types';
+import type { Classificacao, ClassificacaoGeral, Direction, Transaction } from '@/lib/types';
 import type { StatementDetail } from '@/features/statements/api';
 
 export type ClassificarResult = StatementDetail & { warnings: string[] };
@@ -37,12 +37,64 @@ export function useUpdateClassificacao() {
   });
 }
 
+/** Tirar da lista: onde não está em uso é excluída; onde algum lançamento usa, só desativa. */
 export function useDeleteClassificacao() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api(`/api/classificacoes/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      api<{ excluidas: number; desativadas: number }>(`/api/classificacoes/${id}`, { method: 'DELETE' }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['classificacoes'] }),
   });
+}
+
+// --------------------------------------------------------------------------- #
+// Lista geral do escritório
+// --------------------------------------------------------------------------- #
+export function useClassificacoesGerais(direction?: Direction) {
+  const params = new URLSearchParams();
+  if (direction) params.set('direction', direction);
+  return useQuery({
+    queryKey: ['classificacoes', 'gerais', direction],
+    queryFn: () =>
+      api<{ gerais: ClassificacaoGeral[]; pode_editar: boolean }>(`/api/classificacoes/gerais?${params}`),
+  });
+}
+
+export function useCreateGeral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { direction: Direction; nome: string }) =>
+      api<{ geral: ClassificacaoGeral }>('/api/classificacoes/gerais', { method: 'POST', body: input }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['classificacoes', 'gerais'] }),
+  });
+}
+
+export function useDeleteGeral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/api/classificacoes/gerais/${id}`, { method: 'DELETE' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['classificacoes', 'gerais'] }),
+  });
+}
+
+/** Itens da lista geral entram na lista própria (de todas as empresas do mesmo login de cliente). */
+export function useAdicionarDaListaGeral() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { client_id: string; geral_ids: string[] }) =>
+      api<{ incluidas: number; reativadas: number; classificacoes: Classificacao[] }>(
+        '/api/classificacoes/da-lista-geral',
+        { method: 'POST', body: input },
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['classificacoes'] }),
+  });
+}
+
+export type SugestaoMemoria = { id: string; classificacao_id: string; origem: 'memoria' | 'conferir' };
+
+/** O que a memória sugere pros lançamentos ainda sem classificação (não grava). */
+export function buscarSugestoes(statementId: string) {
+  return api<{ sugestoes: SugestaoMemoria[] }>(`/api/statements/${statementId}/classificacao/sugestoes`);
 }
 
 export type CreateClassificarInput = {

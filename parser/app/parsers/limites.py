@@ -11,8 +11,11 @@ from __future__ import annotations
 import io
 import zipfile
 
-# Extrato real mais pesado visto: Mercado Pago, 86 páginas / 1.211 lançamentos.
-MAX_PAGINAS_PDF = 500
+# Extrato real mais pesado visto: Mercado Pago, 86 páginas / 1.211 lançamentos
+# (~14 por página). O sistema aceita até 10.000 lançamentos por extrato e o
+# pedido é ler 8.000 — no Mercado Pago isso dá ~570 páginas; com folga pros
+# bancos que imprimem menos lançamentos por página.
+MAX_PAGINAS_PDF = 1200
 # XML total descompactado de uma planilha (o arquivo enviado tem até 25 MB).
 MAX_XLSX_DESCOMPACTADO = 300 * 1024 * 1024
 # Compressão acima disso, num membro grande, é sinal de zip bomb.

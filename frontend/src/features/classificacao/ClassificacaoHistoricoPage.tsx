@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Paginacao, useItensPorPagina } from '@/components/Paginacao';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/useAuth';
 import { formatDate } from '@/lib/format';
 import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
-import { useDeleteStatement, useStatements } from '@/features/statements/api';
+import { useDeleteStatement, useStatementsPaginados } from '@/features/statements/api';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
   parsing: { text: 'lendo', cls: 'bg-slate-100 text-slate-600' },
@@ -20,10 +21,21 @@ export function ClassificacaoHistoricoPage() {
   const { data: clients } = useClients({ ativo: 'all' });
   const { ehCliente } = useAuth();
   const [clientId, setClientId] = useState('');
-  const { data: statements, isLoading, error } = useStatements({
-    client_id: clientId || undefined,
-    origem_modulo: 'classificacao',
-  });
+  // todos os extratos ficam no histórico, página a página (sem teto de quantos aparecem)
+  const [porPagina, setPorPagina] = useItensPorPagina('historico-classificacao');
+  const [pagina, setPagina] = useState(1);
+  useEffect(() => setPagina(1), [clientId, porPagina]);
+  const { data, isLoading, error } = useStatementsPaginados(
+    { client_id: clientId || undefined, origem_modulo: 'classificacao' },
+    pagina,
+    porPagina,
+  );
+  const statements = data?.statements;
+  const total = data?.total ?? 0;
+  const paginas = Math.max(1, Math.ceil(total / porPagina));
+  useEffect(() => {
+    if (data && pagina > paginas) setPagina(paginas);
+  }, [data, pagina, paginas]);
 
   const delMut = useDeleteStatement();
   const [deleting, setDeleting] = useState<Statement | null>(null);
@@ -54,6 +66,16 @@ export function ClassificacaoHistoricoPage() {
           </button>
         )}
       </div>
+
+      <Paginacao
+        pagina={pagina}
+        paginas={paginas}
+        porPagina={porPagina}
+        total={total}
+        onPagina={setPagina}
+        onPorPagina={setPorPagina}
+        rotulo="extratos"
+      />
 
       <div className="card overflow-x-auto">
         {isLoading ? (
@@ -124,6 +146,16 @@ export function ClassificacaoHistoricoPage() {
           </table>
         )}
       </div>
+
+      <Paginacao
+        pagina={pagina}
+        paginas={paginas}
+        porPagina={porPagina}
+        total={total}
+        onPagina={setPagina}
+        onPorPagina={setPorPagina}
+        rotulo="extratos"
+      />
 
       <ConfirmDialog
         open={!!deleting}
