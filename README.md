@@ -12,8 +12,9 @@ Depois do login cai num **hub** com três módulos:
   (abaixo).
 - **Classificação** — categoriza os lançamentos do extrato por tipo de despesa/
   receita (água, energia, recebimento de clientes…) **antes** de virar
-  contabilidade; serve pra quem quer separar "o que aconteceu no extrato" de
-  "qual conta contábil isso vira".
+  contabilidade, a partir da **lista geral** de classificações do escritório e
+  com **memória** do que já foi classificado; serve pra quem quer separar "o que
+  aconteceu no extrato" de "qual conta contábil isso vira".
 
 O **cliente do escritório** também pode ter login próprio (opcional, liberado no
 cadastro dele): entra só no módulo **Classificação** das empresas liberadas pra
@@ -255,7 +256,9 @@ npm run test -w backend
 cd parser && .venv\Scripts\pytest
 ```
 
-Hoje: **228 testes no backend** (incluindo as regras de acesso num Postgres de verdade), **100 no parser**.
+Hoje: **262 testes no backend** (+2 que pulam sem os arquivos locais), incluindo as
+regras de acesso e as migrations num Postgres de verdade (PGlite: `src/db/*.test.ts`),
+e **118 no parser**.
 
 `backend/src/dominio/exporter.test.ts` tem um **golden test** que compara o
 arquivo gerado com um export real do Domínio (roda se `C:\SEFIP\lancto.txt`
@@ -320,6 +323,27 @@ fazia fica em [`docs/roadmap.md`](docs/roadmap.md).
 e senha criada por ele, só no módulo Classificação, uma ou várias empresas por
 login (migration `0020`); ver [Acesso do cliente](#acesso-do-cliente).
 
+**Classificação — lista geral, memória e trava de duplicado** (2026-11-11, no ar
+no mesmo dia; migrations `0023` e `0024`):
+
+- **Lista geral** de classificações do escritório (só administrador da Equipe
+  inclui/exclui); o cliente monta a lista própria a partir dela, e a lista vale
+  pra todas as empresas do mesmo login. Avulsa, só o escritório cria.
+- **Memória**: descrição já classificada antes na empresa vem classificada no
+  extrato novo; se já teve classificações diferentes, vem como sugestão pra
+  conferir. "Preencher pela memória" pros extratos importados antes.
+- **Trava de extrato duplicado** (mesmos lançamentos da mesma empresa, em
+  qualquer formato ou módulo) e **período do extrato** no topo (o impresso pelo
+  banco, senão o mês inteiro).
+- **Extrato de até 8.000 lançamentos** (PDF até 1.200 páginas; API espera o
+  leitor até 10 min; gravação em lotes) — testado com arquivos de 8.000
+  lançamentos em OFX/CSV/XLSX/PDF e com toda a bateria de `C:\SEFIP\EXTRATOS`.
+  Corrigido o PDF do Mercado Pago com título em "negrito falso" (a 1ª página
+  sumia).
+- Telas: 10/50/100 itens por página (guardado), tabelas com rolagem própria e
+  cabeçalho fixo, Enter/Shift+Enter na Classificação, histórico sem teto.
+- Limpeza: saíram as migrations do Contábil e a tabela `chart_accounts`.
+
 ## Uso no dia a dia
 
 `iniciar.bat` sobe os 3 serviços com um clique e abre o navegador sozinho.
@@ -346,12 +370,25 @@ continua sendo o Supabase:
    to sign up*) — com o sistema na internet, só entra quem for criado no painel
    (ou convidado pelo escritório — ver [Acesso do cliente](#acesso-do-cliente)).
 
-Todo `git push` no `main` publica de novo. Plano **free**: cada serviço dorme
-após 15 min sem uso (~1 min pra acordar; a 1ª importação depois disso pode
-precisar de nova tentativa). Pra uso diário, troque `plan: free` por
-`plan: starter` na API e no leitor. Se o Render der outro endereço a algum
-serviço, ajuste `PARSER_URL`, `FRONTEND_ORIGIN` e `VITE_API_URL` no
-`render.yaml`.
+**Publicar uma versão nova** (o `git push` sozinho **não** publica — o
+auto-deploy do Render não dispara neste repositório):
+
+1. Mudou o banco? Rodar `npm run migrate -w backend` **antes** (na pasta do
+   projeto): a API nova costuma depender das tabelas/funções novas.
+2. `git push` no `main`.
+3. Mudou o `render.yaml` (variáveis, cabeçalhos)? Esperar a sincronização do
+   Blueprint antes do passo 4 — as `VITE_*` entram na tela na hora do build.
+4. Render → cada serviço que mudou (API, tela, leitor) → **Manual Deploy** →
+   *Deploy latest commit*.
+
+Plano **free**: cada serviço dorme após 15 min sem uso. A tela acorda o leitor
+sozinha ao entrar e ao escolher um arquivo (`frontend/src/lib/acordarLeitor.ts`)
+e a API espera ele subir até 1 min antes de dar erro — chamada de dentro do
+Render não acorda serviço dormindo. Pra uso diário, troque `plan: free` por
+`plan: starter` na API e no leitor (extrato muito grande em PDF também lê bem
+mais rápido fora da CPU fracionada do free). Se o Render der outro endereço a
+algum serviço, ajuste `PARSER_URL`, `FRONTEND_ORIGIN`, `VITE_API_URL` e
+`VITE_PARSER_URL` no `render.yaml`.
 
 ## Rodar em outra máquina
 
