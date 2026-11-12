@@ -11,6 +11,7 @@ se misturam.
 from __future__ import annotations
 
 import io
+import re
 
 from app.parsers.pdf import (
     _looks_like_bb_extrato_cc,
@@ -115,4 +116,12 @@ def test_sem_as_linhas_da_tabela_cai_no_leitor_generico():
     pdf = _pdf([_PAGINA_1], separadores=False)
     texto = extract_pdf_text(pdf, None)
     assert _parse_bb_extrato_cc_pdf(pdf, None, texto).transactions == []
-    assert parse_pdf(pdf).transactions == _parse_signed_pdf(texto).transactions
+    lidos = parse_pdf(pdf).transactions
+    generico = _parse_signed_pdf(texto).transactions
+    # data e valor são os do leitor genérico; a descrição vem pelas posições
+    # (celulas.py), sem o lote/documento que o texto corrido misturava
+    assert [(t.date, t.amount_cents, t.direction) for t in lidos] == [
+        (t.date, t.amount_cents, t.direction) for t in generico
+    ]
+    assert lidos[0].description == "Transferência recebida 03/08 08:55 EMPRESA ALFA LTDA"
+    assert not any(re.search(r"10{6,}\d", t.description) for t in lidos)  # nº do documento

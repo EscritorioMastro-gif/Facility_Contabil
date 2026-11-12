@@ -66,3 +66,53 @@ def test_detecta_ofx_como_csv_txt(tmp_path):
     ofx = (FIX / "sample.ofx").read_bytes()
     r = parse_statement("extrato.txt", ofx)
     assert r.format == "ofx"
+
+
+# --------------------------------------------------------------------------- #
+# Descrição completa (pedido de 2026-11-12) — dados fictícios
+# --------------------------------------------------------------------------- #
+def test_descricao_nao_e_a_coluna_data_lancamento():
+    # Inter: "Data Lançamento;Descrição" — procurar "lançamento" primeiro pegava a data
+    csv = (
+        "Extrato Conta Corrente\nConta ;123\n\n"
+        "Data Lançamento;Descrição;Valor;Saldo\n"
+        '01/07/2026;Pix enviado: "Cp :1234-FULANO DE TAL";-107,60;100,00\n'
+    ).encode()
+    r = parse_csv(csv)
+    assert [t.description for t in r.transactions] == ['Pix enviado: "Cp :1234-FULANO DE TAL"']
+
+
+def test_coluna_tipo_com_texto_entra_na_descricao():
+    # PagBank: TIPO + DESCRICAO, como o OFX/PDF do mesmo extrato escrevem
+    csv = (
+        "CODIGO DA TRANSACAO;DATA;TIPO;DESCRICAO;VALOR\n"
+        "aaa-1;01/07/2026;Pagamento de empréstimo;Parcela CCB-0001;-0,74\n"
+        "aaa-2;01/07/2026;Vendas;Disponivel PIX;4,93\n"
+    ).encode()
+    r = parse_csv(csv)
+    assert [(t.description, t.direction) for t in r.transactions] == [
+        ("Pagamento de empréstimo - Parcela CCB-0001", "saida"),
+        ("Vendas - Disponivel PIX", "entrada"),
+    ]
+
+
+def test_colunas_que_completam_a_descricao():
+    # Sicoob: "Informações complementares" (quem pagou o Pix); Itaú: Razão Social + CPF/CNPJ
+    sicoob = (
+        "DATA;DOCUMENTO;HISTÓRICO;INFORMAÇÕES COMPLEMENTARES;VALOR\n"
+        '03/07/2026;Pix;PIX RECEBIDO - OUTRA IF;"Recebimento Pix\nEMPRESA FICTICIA LTDA\n11.222.333 0001-81";85,00\n'
+        "06/07/2026;2090146;TARIFA COBRANÇA;;-1,80\n"
+    ).encode()
+    assert [t.description for t in parse_csv(sicoob).transactions] == [
+        "PIX RECEBIDO - OUTRA IF Recebimento Pix EMPRESA FICTICIA LTDA 11.222.333 0001-81",
+        "TARIFA COBRANÇA",
+    ]
+    itau = (
+        "Data;Lançamento;Razão Social;CPF/CNPJ;Valor (R$);Saldo (R$)\n"
+        "24/06/2026;PIX ENVIADO;FULANO DE TAL;000.111.222-33;-967,00;\n"
+        "24/06/2026;RENDIMENTOS REND PAGO APLIC AUT MAIS;;;0,11;\n"
+    ).encode()
+    assert [t.description for t in parse_csv(itau).transactions] == [
+        "PIX ENVIADO FULANO DE TAL 000.111.222-33",
+        "RENDIMENTOS REND PAGO APLIC AUT MAIS",
+    ]

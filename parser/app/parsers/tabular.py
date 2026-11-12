@@ -131,7 +131,18 @@ def _map_columns_from_header(header: list[str]) -> dict | None:
         return None
 
     date_i = find(DATE_HEADERS, ("data", "date"))
-    desc_i = find(DESC_HEADERS, ("descri", "histor", "lancamento", "memo"))
+    # Descrição: "Descrição"/"Histórico" antes de "Lançamento" — no Inter o
+    # cabeçalho é "Data Lançamento;Descrição": procurar "lancamento" primeiro
+    # pegava a coluna da DATA e o lançamento saía com a data como descrição.
+    desc_i = next(
+        (
+            i
+            for chave in ("descri", "histor", "memo", "detalhe", "titulo", "lancamento")
+            for i, h in enumerate(header)
+            if chave in h and i != date_i
+        ),
+        None,
+    )
     amount_i = find(AMOUNT_HEADERS, ("valor", "amount"))
     debit_i = find(DEBIT_HEADERS, ("debito",))
     credit_i = find(CREDIT_HEADERS, ("credito",))
@@ -150,9 +161,21 @@ def _map_columns_from_header(header: list[str]) -> dict | None:
     if amount_i is None and (debit_i is None and credit_i is None):
         return None
 
+    # colunas que completam a descrição: Sicoob "Informações complementares"
+    # (quem pagou/recebeu o Pix), Itaú "Razão Social" + "CPF/CNPJ" — o PDF do
+    # mesmo extrato traz tudo junto; sem elas o Pix virava só "PIX ENVIADO"
+    usadas = {date_i, desc_i, amount_i, debit_i, credit_i, ind_i, bal_i}
+    extras = [
+        i
+        for i, h in enumerate(header)
+        if i not in usadas
+        and re.search(r"complement|razao social|cpf|cnpj|favorecido|contraparte|^nome$|detalhe", h)
+    ]
+
     return {
         "date": date_i,
         "desc": desc_i,
+        "extras": extras,
         "amount": amount_i,
         "debit": debit_i,
         "credit": credit_i,
@@ -222,7 +245,12 @@ def _row_to_txn(row: list[str], cols: dict) -> NormalizedTransaction | None:
     if not d:
         return None
 
-    desc = cell(cols["desc"])
+    desc = " ".join(t for t in [cell(cols["desc"]), *(cell(i) for i in cols.get("extras", []))] if t)
+    # coluna "Tipo" com texto ("Pagamento de empréstimo", "Vendas") em vez de
+    # D/C: faz parte da descrição — o OFX/PDF do mesmo banco escrevem "TIPO - DESCRIÇÃO"
+    tipo = cell(cols.get("indicator"))
+    if tipo and direction_from_indicator(tipo) is None and len(tipo) > 2 and cols.get("indicator") != cols["desc"]:
+        desc = f"{tipo} - {desc}" if desc and _norm(desc) != _norm(tipo) else (desc or tipo)
 
     amount = None
     direction = None

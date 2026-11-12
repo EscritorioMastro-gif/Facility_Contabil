@@ -33,3 +33,25 @@ def test_bb_consultas_pega_o_valor_nao_o_saldo():
     assert tarifa.amount_cents == 5_000
     # nenhuma entrada fantasma vinda do saldo
     assert all(t.direction == "saida" for t in r.transactions)
+
+
+def test_bb_consultas_sem_o_documento_e_com_o_complemento_depois_de_linha_em_branco():
+    # "Pix - Enviado      70.101": o número é a coluna Documento; o complemento
+    # pode vir depois de linhas em branco (dados fictícios)
+    text = "\n".join(
+        [
+            "Consultas - Extrato de conta corrente",
+            "Dt. balancete Dt. movimento Ag. origem Lote Histórico Documento Valor R$ Saldo",
+            " 01/07/2026       0000 13105144 Pix - Enviado      70.101 100,00 D",
+            "                         01/07 08:13 FULANO DE TAL",
+            " 13/07/2026       0000 13105109 Pagamento de Boleto 71.301 344,73 D 3.908,62 C",
+            "",
+            "",
+            "                         EMPRESA FICTICIA LTDA",
+        ]
+    )
+    r = _parse_bb_consultas_pdf(text)
+    assert [t.description for t in r.transactions] == [
+        "Pix - Enviado - 01/07 08:13 FULANO DE TAL",
+        "Pagamento de Boleto - EMPRESA FICTICIA LTDA",
+    ]

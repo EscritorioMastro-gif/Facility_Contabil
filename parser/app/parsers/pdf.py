@@ -7,6 +7,7 @@ from datetime import date
 from decimal import Decimal
 
 from ..schemas import NormalizedTransaction, ParseResult
+from .celulas import celulas_do_documento, melhorar_descricoes
 from .common import parse_date, to_cents
 from .limites import ArquivoPesadoError, conferir_paginas_pdf
 
@@ -107,6 +108,41 @@ def extract_pdf_text(content: bytes, password: str | None) -> str:
             parts.append(sem_repetidas.extract_text(layout=True) or sem_repetidas.extract_text() or "")
             p.close()  # extrato de centenas de páginas: libera o cache de cada uma
         return "\n".join(parts)
+
+
+def _ler_pdf(content: bytes, password: str | None) -> tuple[str, list[list[dict]]]:
+    """Texto (layout) e palavras com posição de cada página, numa leitura só:
+    o caro é o pdfminer analisar a página — fazer isso duas vezes (texto aqui,
+    palavras depois) triplicava o tempo de um PDF de 570 páginas."""
+    from pdfplumber.utils.text import TEXTMAP_KWARGS, WORD_EXTRACTOR_KWARGS, WordExtractor
+
+    with open_pdf(content, password) as pdf:
+        partes: list[str] = []
+        paginas: list[list[dict]] = []
+        for p in pdf.pages:
+            sem_repetidas = _sem_repetidas(p)
+            # o mesmo caminho do extract_text(layout=True) do pdfplumber, mas
+            # guardando as palavras que ele já agrupou (agrupar é o caro)
+            opts = dict(
+                layout=True,
+                presorted=True,
+                layout_bbox=sem_repetidas.bbox,
+                layout_width=sem_repetidas.width,
+                layout_height=sem_repetidas.height,
+            )
+            mapa = WordExtractor(**{k: opts[k] for k in WORD_EXTRACTOR_KWARGS if k in opts}).extract_wordmap(
+                sem_repetidas.chars
+            )
+            texto = mapa.to_textmap(**{k: opts[k] for k in TEXTMAP_KWARGS if k in opts}).as_string
+            partes.append(texto if texto.strip() else (sem_repetidas.extract_text() or ""))
+            paginas.append(
+                [
+                    {"text": w["text"], "x0": w["x0"], "x1": w["x1"], "top": w["top"], "bottom": w["bottom"]}
+                    for w, _ in mapa.tuples
+                ]
+            )
+            p.close()
+        return "\n".join(partes), paginas
 
 
 def _sem_repetidas(page):
@@ -230,6 +266,35 @@ def _looks_like_bb_extrato_cc(t: str) -> bool:
 # --------------------------------------------------------------------------- #
 _NU_DAY_RE = re.compile(r"^\s*(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\b")
 _NU_VALUE_RE = re.compile(rf"(?:^|\s)(-?\s?R?\$?\s?{_MONEY})\s*$")
+# rodapé de página (a descrição pode continuar na página seguinte)
+_NU_RODAPE_RE = re.compile(r"^(tem alguma d\w+vida|extrato gerado dia)", re.IGNORECASE)
+# o que nunca é continuação de descrição
+_NU_FIM_RE = re.compile(
+    r"^(total de|saldo|o saldo l\w+quido|n\w+o nos responsabilizamos|asseguramos|nu financeira|nu pagamentos s\.a)",
+    re.IGNORECASE,
+)
+# tipo do lançamento: o OFX/CSV do Nubank escreve "TIPO - DETALHE", o PDF não põe o hífen
+_NU_TIPO_RE = re.compile(
+    r"^(Transfer\w+ncia (?:recebida|enviada)(?: pelo Pix)?|Pagamento de boleto efetuado) (?!-)",
+    re.IGNORECASE,
+)
+_NU_MAX_PEDACOS = 8
+
+
+def _nu_juntar(desc: str, pedaco: str) -> str:
+    """Junta um pedaço da descrição quebrada. A quebra de linha às vezes cai no
+    meio de uma palavra: CNPJ ("27.415.911" + "/0001-36", "0004-" + "82") e
+    "S." + "A." voltam a ficar grudados, como no OFX."""
+    if not desc:
+        return pedaco
+    grudado = (
+        pedaco.startswith("/")
+        or re.search(r"[\d/]-$|/$", desc) is not None
+        or (re.search(r"\b[A-Z]\.$", desc) is not None and re.match(r"[A-Z]\.", pedaco) is not None)
+        # CPF/CNPJ partido depois do ponto: "•••." + "757.928-••", "12.336." + "838/0004-82"
+        or (re.search(r"(?:\d|[^\w\s])\.$", desc) is not None and re.match(r"\d", pedaco) is not None)
+    )
+    return desc + pedaco if grudado else f"{desc} {pedaco}"
 
 
 def _parse_nubank_pdf(text: str) -> ParseResult:
@@ -270,17 +335,40 @@ def _parse_nubank_pdf(text: str) -> ParseResult:
         if not toks or toks[0][2] == 0:
             continue
 
-        desc = ln[: mv.start()].strip(" -\t")
+        # A descrição quebra em 2-3 linhas e o texto do PDF às vezes põe uma
+        # linha EM BRANCO entre os pedaços (depende do espaçamento). Antes a
+        # leitura parava na 1ª linha em branco: o mesmo pagador saía inteiro
+        # num lançamento e cortado no outro ("LOJA X ... - 12.345.678" x "LOJA X
+        # ... - 12.345.678/0001-90 - BANCO Y ..."), e a memória da Classificação
+        # não reconhecia um pelo outro. Agora junta todos os pedaços, pula a
+        # quebra de página, e o resultado fica igual ao MEMO do OFX.
+        desc = ln[: mv.start(1)].strip()
+        # "... LTDA - 900,00": a quebra caiu logo depois do hífen da descrição, que
+        # não é sinal do valor (o lado já vem de "Total de entradas/saídas")
+        if re.match(r"-\s", mv.group(1)):
+            desc += " -"
         j = i + 1
-        while j < len(lines) and j < i + 4:
+        pedacos = 0
+        while j < len(lines) and pedacos < _NU_MAX_PEDACOS:
             nxt = lines[j].strip()
-            if not nxt or _NU_DAY_RE.match(nxt) or _NU_VALUE_RE.search(nxt):
+            if not nxt:
+                j += 1
+                continue
+            if _NU_RODAPE_RE.match(nxt):
+                # quebra de página: o resto da descrição vem depois do rodapé e do cabeçalho
+                fim = next((k for k in range(j, min(len(lines), j + 40)) if "valores em r$" in lines[k].lower()), None)
+                if fim is None:
+                    break
+                j = fim + 1
+                continue
+            if _NU_DAY_RE.match(nxt) or _NU_VALUE_RE.search(nxt) or _NU_FIM_RE.match(nxt):
                 break
-            if nxt.lower().startswith(("total de", "saldo")):
-                break
-            desc = f"{desc} {nxt}"
+            desc = _nu_juntar(desc, nxt)
+            pedacos += 1
             j += 1
         desc = re.sub(r"\s+", " ", desc).strip(" -")
+        # o OFX/CSV do Nubank escreve "pelo Pix - FULANO"; o PDF, "pelo Pix FULANO"
+        desc = _NU_TIPO_RE.sub(r"\1 - ", desc)
         if not desc:
             continue
 
@@ -346,6 +434,7 @@ _BB_LINE = re.compile(
     rf"(?:\s+{_MONEY}\s+[DC])?\s*$"
 )
 _BB_PREFIX = re.compile(r"^\d{4}\s+\d{6,10}\s+")
+_BB_DOCUMENTO = re.compile(r"\s+\d[\d.]*$")
 
 
 def _bb_unstick(line: str) -> str:
@@ -372,14 +461,17 @@ def _parse_bb_consultas_pdf(text: str) -> ParseResult:
         val = Decimal(g["val"].replace(".", "").replace(",", "."))
         if not d or val == 0:
             continue
-        desc = _clean_desc(_BB_PREFIX.sub("", g["mid"]))
+        # "Pix - Enviado      70.101": o número no fim é a coluna Documento, não
+        # faz parte do histórico (o CSV/OFX do BB escrevem "Pix - Enviado - ...")
+        desc = _clean_desc(_BB_DOCUMENTO.sub("", _BB_PREFIX.sub("", g["mid"])))
         if not desc and i > 0:
             prev = _bb_unstick(lines[i - 1].rstrip()).strip()
             if prev and not _BB_LINE.match(prev) and not _SKIP_DESC.search(prev) and len(prev) < 90:
                 desc = _clean_desc(_BB_PREFIX.sub("", prev))
         if not desc or _SKIP_DESC.search(desc):
             continue
-        nxt = lines[i + 1].strip() if i + 1 < len(lines) else ""
+        # complemento na linha de baixo — às vezes depois de linhas em branco
+        nxt = next((lines[k].strip() for k in range(i + 1, min(len(lines), i + 5)) if lines[k].strip()), "")
         if (
             nxt and not _BB_LINE.match(_bb_unstick(nxt)) and len(nxt) < 90
             and not _SKIP_DESC.search(nxt)
@@ -798,7 +890,7 @@ def _result(text: str, txns: list[NormalizedTransaction], seen: list[date]) -> P
 
 
 def parse_pdf(content: bytes, password: str | None = None) -> ParseResult:
-    text = extract_pdf_text(content, password)
+    text, palavras = _ler_pdf(content, password)
 
     if _looks_like_mercadopago(text):
         r = _parse_mercadopago_pdf(content, password, text)
@@ -807,11 +899,31 @@ def parse_pdf(content: bytes, password: str | None = None) -> ParseResult:
     if _looks_like_nubank(text):
         return _parse_nubank_pdf(text)
     if _looks_like_sicoob(text):
-        return _parse_sicoob_pdf(text)
+        return _com_descricoes_completas(palavras, _parse_sicoob_pdf(text))
     if _looks_like_bb_extrato_cc(text):
         r = _parse_bb_extrato_cc_pdf(content, password, text)
         if r.transactions:
             return r
     if _looks_like_bb_consultas(text):
         return _parse_bb_consultas_pdf(text)
-    return _parse_signed_pdf(text)
+    return _com_descricoes_completas(palavras, _parse_signed_pdf(text))
+
+
+def _com_descricoes_completas(palavras: list[list[dict]], r: ParseResult) -> ParseResult:
+    """Leitor genérico (texto corrido) + descrição lida pelas posições na página
+    (celulas.py): data e valor continuam do genérico; a descrição troca onde a
+    tabela tem um lançamento de mesmo valor na mesma ordem."""
+    if not r.transactions:
+        return r
+    try:
+        melhorar_descricoes(r.transactions, celulas_do_documento(palavras))
+    except Exception:  # noqa: BLE001 — a descrição melhor é bônus; o lido já serve
+        pass
+    for t in r.transactions:
+        # C6: a coluna Tipo repete a descrição ("Entrada PIX Pix recebido de X");
+        # o OFX do mesmo extrato escreve só "Pix recebido de X"
+        t.description = _C6_TIPO_PIX.sub("", t.description)
+    return r
+
+
+_C6_TIPO_PIX = re.compile(r"^(?:Entrada|Sa\w+da) PIX (?=Pix )")
