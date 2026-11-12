@@ -22,6 +22,11 @@ export function formatMoney(cents: number): string {
   return (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/** 12.3 → "12,3%" (sempre 1 casa) */
+export function formatPct(p: number): string {
+  return `${p.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+
 /**
  * "1.234,56" → 123456 (centavos). Mesma ambiguidade de "só ponto" do
  * parseMoney de ImportPage.tsx (resolve pelo nº de dígitos depois do

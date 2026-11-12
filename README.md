@@ -79,6 +79,21 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
    códigos de histórico e o lote, e o mesmo registro segue pro fluxo normal de
    Revisão/exportação (sem duplicar o extrato).
 
+**Dashboard** (Classificação → Dashboard): receitas por classificação de entrada
+e despesas por classificação de saída, cada uma com **valor e % do total**, receitas
+x despesas por mês, resultado e quantos lançamentos faltam classificar. Três blocos:
+**roscas do mês** (as 6 maiores com cor própria, o resto em "Demais", todas na
+legenda com o nome completo; o centro mostra o total e quanto ele é do período),
+**mapa de árvore do período** (todas as classificações, área proporcional ao valor)
+e a **tabela** + o gráfico por mês. Filtros: a empresa (o cliente vê "todas as
+minhas empresas" ou uma; o escritório escolhe a empresa e pode somar todas as do
+mesmo cliente), o período (mês a mês) e o mês das roscas (sem escolha, o último mês
+do período com lançamento classificado). A cor de cada classificação na rosca vem
+da posição dela no período, então não muda de um mês pro outro. Só lançamentos
+classificados e não inativados entram nos totais; a tabela copia pro Excel. A conta
+é feita no banco (`dashboard_classificacao`, migration `0025`); os gráficos são
+desenhados na própria tela, sem biblioteca.
+
 As tabelas de lançamentos (Revisão, Classificação, planilha Excel, Histórico)
 mostram 10, 50 ou 100 itens por página (a escolha fica guardada) e rolam por
 dentro — a barra pra passar pro lado fica sempre à vista.

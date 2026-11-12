@@ -47,6 +47,7 @@ export const MODULES: ModuleDef[] = [
     home: '/classificacao',
     match: (p) => p.startsWith('/classificacao'),
     nav: [
+      { to: '/classificacao/dashboard', label: 'Dashboard' },
       { to: '/classificacao', label: 'Nova importação' },
       { to: '/classificacao/historico', label: 'Histórico' },
       { to: '/classificacao/categorias', label: 'Classificações' },

@@ -18,11 +18,13 @@ import {
   alterarNoGrupo,
   COLS_CLASSIFICACAO,
   DUPLICADA,
+  empresasDoGrupo,
   listaDaEmpresa,
   removerDoGrupo,
   sincronizarGrupo,
   type Classificacao,
 } from './grupo.js';
+import { dashboardQuerySchema, montarDashboard } from './dashboard.js';
 
 const TABLE = 'classificacoes';
 const GERAIS = 'classificacoes_gerais';
@@ -129,6 +131,28 @@ classificacoesRouter.post('/da-lista-geral', async (req, res, next) => {
       itens: (gerais ?? []).map((g) => ({ direction: g.direction, nome: g.nome, geral_id: g.id })),
     });
     res.status(201).json({ ...r, classificacoes: await listaDaEmpresa(supabase, dto.client_id) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --------------------------------------------------------------------------- #
+// Dashboard — uma empresa, ou todas as do mesmo cliente (grupo=true)
+// --------------------------------------------------------------------------- #
+classificacoesRouter.get('/dashboard', async (req, res, next) => {
+  try {
+    const { client_id, grupo, de, ate } = dashboardQuerySchema.parse(req.query);
+    if (!client_id) throw badRequest('Escolha a empresa.');
+    const supabase = db(req);
+    const ids = grupo ? await empresasDoGrupo(supabase, client_id) : [client_id];
+    const { data, error } = await supabase.from('clients').select('id, razao_social').in('id', ids).order('razao_social');
+    if (error) throw mapPgrstError(error, 'ler as empresas');
+    const empresas = ((data ?? []) as Array<{ id: string; razao_social: string }>).map((e) => ({
+      id: e.id,
+      razao_social: e.razao_social,
+    }));
+    if (!empresas.some((e) => e.id === client_id)) throw notFound('Cliente não encontrado');
+    res.json(await montarDashboard(supabase, { empresas, de, ate }));
   } catch (err) {
     next(err);
   }

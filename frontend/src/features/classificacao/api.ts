@@ -90,7 +90,41 @@ export function useAdicionarDaListaGeral() {
   });
 }
 
-export type SugestaoMemoria = { id: string; classificacao_id: string; origem: 'memoria' | 'conferir' };
+// --------------------------------------------------------------------------- #
+// Dashboard
+// --------------------------------------------------------------------------- #
+export type ItemDashboard = { nome: string; total_cents: number; qtd: number; percentual: number };
+export type Dashboard = {
+  empresas: Array<{ id: string; razao_social: string }>;
+  totais: { receitas_cents: number; despesas_cents: number; resultado_cents: number };
+  receitas: ItemDashboard[];
+  despesas: ItemDashboard[];
+  /** receitas/despesas de cada mês: % sobre o total daquele mês */
+  meses: MesDashboard[];
+  pendentes: { qtd: number; total_cents: number };
+};
+export type MesDashboard = {
+  mes: string;
+  receitas_cents: number;
+  despesas_cents: number;
+  receitas: ItemDashboard[];
+  despesas: ItemDashboard[];
+};
+export type FiltroDashboard = { client_id?: string; grupo?: boolean; de: string; ate: string };
+
+/** Escritório: client_id obrigatório (grupo = todas as do mesmo cliente). Cliente: sem client_id = todas as dele. */
+export function useDashboard(f: FiltroDashboard, opts: { enabled?: boolean } = {}) {
+  const params = new URLSearchParams({ de: f.de, ate: f.ate });
+  if (f.client_id) params.set('client_id', f.client_id);
+  if (f.grupo) params.set('grupo', 'true');
+  return useQuery({
+    queryKey: ['classificacoes', 'dashboard', f],
+    queryFn: () => api<Dashboard>(`/api/classificacoes/dashboard?${params}`),
+    enabled: opts.enabled ?? true,
+  });
+}
+
+export type SugestaoMemoria ={ id: string; classificacao_id: string; origem: 'memoria' | 'conferir' };
 
 /** O que a memória sugere pros lançamentos ainda sem classificação (não grava). */
 export function buscarSugestoes(statementId: string) {

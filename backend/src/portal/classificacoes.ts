@@ -18,6 +18,7 @@ import {
   geralListQuerySchema,
 } from '../classificacoes/schema.js';
 import { COLS_GERAL } from '../classificacoes/router.js';
+import { dashboardQuerySchema, montarDashboard } from '../classificacoes/dashboard.js';
 import {
   adicionarAoGrupo,
   alterarNoGrupo,
@@ -62,6 +63,26 @@ portalClassificacoesRouter.get('/gerais', async (req, res, next) => {
     const { data, error } = await q.order('nome', { ascending: true });
     if (error) throw mapPgrstError(error, 'listar a lista geral');
     res.json({ gerais: data ?? [], pode_editar: false });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /dashboard  — uma empresa do login, ou todas (sem client_id)
+portalClassificacoesRouter.get('/dashboard', async (req, res, next) => {
+  try {
+    const admin = adminDe(req);
+    const { client_id, de, ate } = dashboardQuerySchema.parse(req.query);
+    const empresas = client_id
+      ? [await exigirEmpresa(admin, req.auth!.userId, client_id)]
+      : await empresasDoLogin(admin, req.auth!.userId);
+    res.json(
+      await montarDashboard(admin, {
+        empresas: empresas.map((e) => ({ id: e.id, razao_social: e.razao_social })),
+        de,
+        ate,
+      }),
+    );
   } catch (err) {
     next(err);
   }

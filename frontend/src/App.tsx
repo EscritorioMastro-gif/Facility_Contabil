@@ -15,6 +15,7 @@ import { ClassificacaoRevisaoPage } from '@/features/classificacao/Classificacao
 import { ClassificacaoHistoricoPage } from '@/features/classificacao/ClassificacaoHistoricoPage';
 import { CategoriasPage } from '@/features/classificacao/CategoriasPage';
 import { ListaGeralPage } from '@/features/classificacao/ListaGeralPage';
+import { DashboardPage } from '@/features/classificacao/DashboardPage';
 import { EquipePage } from '@/features/equipe/EquipePage';
 
 export function App() {
@@ -38,6 +39,7 @@ export function App() {
         <Route path="/importar/excel" element={<SoEscritorio><ExcelImportPage /></SoEscritorio>} />
         <Route path="/revisao/:id" element={<SoEscritorio><RevisaoPage /></SoEscritorio>} />
         <Route path="/historico" element={<SoEscritorio><HistoricoPage /></SoEscritorio>} />
+        <Route path="/classificacao/dashboard" element={<DashboardPage />} />
         <Route path="/classificacao" element={<ClassificarPage />} />
         <Route path="/classificacao/revisao/:id" element={<ClassificacaoRevisaoPage />} />
         <Route path="/classificacao/historico" element={<ClassificacaoHistoricoPage />} />
