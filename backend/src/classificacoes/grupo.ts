@@ -34,7 +34,7 @@ export type ItemDaLista = { direction: 'entrada' | 'saida'; nome: string; geral_
 export const DUPLICADA = 'Já existe uma classificação com esse nome para essa direção.';
 
 /** Mesmo item da lista = mesma direção e mesmo nome (sem diferença de maiúsculas/espaços). */
-const chaveDoItem = (c: { direction: string; nome: string }) =>
+export const chaveDoItem = (c: { direction: string; nome: string }) =>
   `${c.direction}\u0000${c.nome.trim().replace(/\s+/g, ' ').toLocaleLowerCase('pt-BR')}`;
 
 /** A empresa e as outras liberadas pros mesmos logins de cliente. */

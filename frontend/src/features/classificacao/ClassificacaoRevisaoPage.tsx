@@ -16,6 +16,9 @@ import { AdicionarDaListaGeral } from './AdicionarDaListaGeral';
 
 type Filter = 'todas' | 'entrada' | 'saida' | 'pendentes' | 'sugestoes';
 
+/** Mesma descrição = igual sem diferença de maiúsculas e espaços (a mesma regra da memória). */
+const chaveDaDescricao = (s: string | null | undefined) => (s ?? '').trim().toUpperCase().replace(/\s+/g, ' ');
+
 export function ClassificacaoRevisaoPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -30,6 +33,8 @@ export function ClassificacaoRevisaoPage() {
     msg: null,
     rodada: 0,
   });
+  // linhas iguais preenchidas junto com a que o operador classificou (pra poder desfazer)
+  const [iguais, setIguais] = useState<{ n: number; nome: string; antes: Map<string, string | null> } | null>(null);
   const { ehCliente } = useAuth();
 
   const clientId = data?.statement.client_id ?? '';
@@ -125,7 +130,44 @@ export function ClassificacaoRevisaoPage() {
 
   function onSave() {
     if (!isDirty) return;
+    setIguais(null);
     save.mutate(changes);
+  }
+
+  /**
+   * Classificou uma linha → as outras do MESMO extrato com a mesma descrição
+   * (e o mesmo tipo) vão junto: as vazias e as que ainda são sugestão. Linha já
+   * escolhida por alguém (ou "memória") fica como está; limpar não se espalha.
+   */
+  function classificar(txn: Transaction, valor: string | null) {
+    patchRow(txn.id, valor);
+    if (!valor) return;
+    const chave = chaveDaDescricao(txn.descricao_raw);
+    const mesmas = transactions.filter(
+      (t) =>
+        t.id !== txn.id &&
+        !t.ignorado &&
+        t.direction === txn.direction &&
+        chaveDaDescricao(t.descricao_raw) === chave,
+    );
+    const preencher = mesmas.filter((t) => get(t.id) !== valor && (!get(t.id) || origemDe(t) === 'conferir'));
+    // sugestão que já era essa mesma classificação: o operador acabou de confirmar
+    const confirmar = mesmas.filter((t) => get(t.id) === valor && origemDe(t) === 'conferir').map((t) => t.id);
+    if (confirmar.length) aceitar(confirmar);
+    if (!preencher.length) {
+      setIguais(null);
+      return;
+    }
+    const antes = new Map(preencher.map((t) => [t.id, get(t.id)]));
+    patchMany((t) => antes.has(t.id), valor);
+    const nome = catalogo[txn.direction].find((c) => c.id === valor)?.nome ?? '';
+    setIguais({ n: preencher.length, nome, antes });
+  }
+
+  function desfazerIguais() {
+    if (!iguais) return;
+    for (const [idLinha, anterior] of iguais.antes) patchRow(idLinha, anterior);
+    setIguais(null);
   }
 
   async function preencherPelaMemoria() {
@@ -215,8 +257,8 @@ export function ClassificacaoRevisaoPage() {
           )}
           {stats.sugestoes.length > 0 && (
             <span className="text-amber-800">
-              {stats.sugestoes.length} com sugestão para conferir: a descrição já teve classificações diferentes — o
-              sistema pôs a mais usada.
+              {stats.sugestoes.length} com sugestão para conferir: a descrição já teve classificações diferentes
+              (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente.
             </span>
           )}
         </p>
@@ -308,7 +350,23 @@ export function ClassificacaoRevisaoPage() {
       {!somenteLeitura && shown.length > 0 && (
         <p className="text-xs text-slate-500">
           Dica: no campo da classificação, digite as primeiras letras para escolher e aperte <b>Enter</b> para ir ao
-          lançamento de baixo (<b>Shift+Enter</b> volta).
+          lançamento de baixo (<b>Shift+Enter</b> volta). Os lançamentos com a mesma descrição neste extrato são
+          classificados junto.
+        </p>
+      )}
+
+      {iguais && (
+        <p className="flex flex-wrap items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          <span>
+            Também classifiquei {iguais.n} lançamento(s) com a mesma descrição
+            {iguais.nome ? ` como "${iguais.nome}"` : ''}.
+          </span>
+          <button type="button" className="font-medium underline" onClick={desfazerIguais}>
+            desfazer
+          </button>
+          <button type="button" className="ml-auto text-xs text-brand-700/70 hover:text-brand-800" onClick={() => setIguais(null)}>
+            fechar
+          </button>
         </p>
       )}
 
@@ -362,7 +420,7 @@ export function ClassificacaoRevisaoPage() {
                         direction={txn.direction}
                         options={catalogo[txn.direction]}
                         value={get(txn.id)}
-                        onChange={(v) => patchRow(txn.id, v)}
+                        onChange={(v) => classificar(txn, v)}
                         onKeyDown={(e) => navegar(e, i)}
                         disabled={somenteLeitura}
                         className="input h-8 w-56 px-2 py-1 text-xs disabled:bg-slate-100"
@@ -404,7 +462,13 @@ export function ClassificacaoRevisaoPage() {
         </span>
         <div className="flex gap-2">
           {isDirty && (
-            <button className="btn-ghost" onClick={reset}>
+            <button
+              className="btn-ghost"
+              onClick={() => {
+                reset();
+                setIguais(null);
+              }}
+            >
               Descartar alterações
             </button>
           )}
@@ -450,7 +514,7 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
       <span className="flex items-center gap-1 whitespace-nowrap">
         <span
           className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
-          title="Sugestão: essa descrição já teve classificações diferentes — o sistema pôs a mais usada"
+          title="Sugestão para conferir: essa descrição já teve classificações diferentes (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente"
         >
           sugestão
         </span>

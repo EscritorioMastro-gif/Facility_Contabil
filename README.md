@@ -68,7 +68,11 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
    Classificação avulsa (fora da lista geral) só o escritório cria.
    **Memória**: descrição já classificada antes na empresa vem classificada no
    extrato novo ("memória"); se já teve classificações diferentes, vem a mais
-   usada marcada como **sugestão** pra conferir. No campo da classificação,
+   usada marcada como **sugestão** pra conferir. Descrição que a empresa nunca
+   classificou, mas outra empresa do **mesmo cliente** (mesmo login) já, vem
+   como sugestão com a classificação de mesmo nome. Classificar uma linha
+   classifica junto as outras do mesmo extrato com a mesma descrição e o mesmo
+   tipo (as vazias e as sugestões; dá pra desfazer). No campo da classificação,
    **Enter** desce pro lançamento de baixo (Shift+Enter sobe). Tirar uma
    categoria da lista exclui onde não está em uso e só desativa onde está.
 3. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
@@ -331,7 +335,9 @@ no mesmo dia; migrations `0023` e `0024`):
   pra todas as empresas do mesmo login. Avulsa, só o escritório cria.
 - **Memória**: descrição já classificada antes na empresa vem classificada no
   extrato novo; se já teve classificações diferentes, vem como sugestão pra
-  conferir. "Preencher pela memória" pros extratos importados antes.
+  conferir. "Preencher pela memória" pros extratos importados antes. Desde
+  2026-11-12 a memória das outras empresas do mesmo cliente também vira
+  sugestão.
 - **Trava de extrato duplicado** (mesmos lançamentos da mesma empresa, em
   qualquer formato ou módulo) e **período do extrato** no topo (o impresso pelo
   banco, senão o mês inteiro).
