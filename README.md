@@ -75,7 +75,10 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
    tipo (as vazias e as sugestões; dá pra desfazer). No campo da classificação,
    **Enter** desce pro lançamento de baixo (Shift+Enter sobe). Tirar uma
    categoria da lista exclui onde não está em uso e só desativa onde está.
-3. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
+3. O cliente confere e **aprova** o mês pelo portal (ver
+   [Aprovação do cliente](#aprovação-do-cliente) abaixo); o escritório vê no
+   Histórico quais meses já foram aprovados.
+4. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
    códigos de histórico e o lote, e o mesmo registro segue pro fluxo normal de
    Revisão/exportação (sem duplicar o extrato).
 
@@ -92,8 +95,14 @@ classificados e não inativados entram nos totais; a tabela copia pro Excel. A c
 é feita no banco (`dashboard_classificacao`, migration `0025`); os gráficos são
 desenhados na própria tela, sem biblioteca.
 
-**Aprovação do cliente** (migration `0026`): o login de cliente tem um botão só,
-**Aprovar**, que também salva. Com lançamento pendente, ele avisa "Faltam N
+As tabelas de lançamentos (Revisão, Classificação, planilha Excel, Histórico)
+mostram 10, 50 ou 100 itens por página (a escolha fica guardada) e rolam por
+dentro — a barra pra passar pro lado fica sempre à vista.
+
+### Aprovação do cliente
+
+Migration `0026`. O login de cliente tem um botão só, **Aprovar**, que também
+salva. Com lançamento pendente, ele avisa "Faltam N
 lançamentos para classificar" e pergunta se salva o que já foi classificado ou se
 continua a classificação (sem aprovar). Com tudo classificado, o cliente declara que
 conferiu as classificações (**Conferi e aprovo**) e o sistema salva e aprova. Fica
@@ -104,10 +113,6 @@ classificação depois, o extrato aparece como **alterado após a aprovação** 
 cliente aprovar de novo. O escritório vê a situação no Histórico e no topo da tela
 de classificação; só o portal aprova (o login do escritório não consegue marcar
 aprovação, nem direto no banco).
-
-As tabelas de lançamentos (Revisão, Classificação, planilha Excel, Histórico)
-mostram 10, 50 ou 100 itens por página (a escolha fica guardada) e rolam por
-dentro — a barra pra passar pro lado fica sempre à vista.
 
 ## Acesso do cliente
 
@@ -121,9 +126,9 @@ remover.
   guarda só o hash. Esqueceu? **Esqueci minha senha** na tela de entrada.
 - O login é o **e-mail** do cliente. O mesmo e-mail pode ser liberado em
   **várias empresas** (mesmo login, escolhe a empresa dentro do módulo).
-- Ele vê **só o módulo Classificação**: enviar extrato, classificar, montar a
-  lista própria a partir da lista geral do escritório, histórico. **Cadastros**
-  e **Importação** aparecem com cadeado.
+- Ele vê **só o módulo Classificação**: enviar extrato, classificar e aprovar
+  o mês, montar a lista própria a partir da lista geral do escritório,
+  histórico e Dashboard. **Cadastros** e **Importação** aparecem com cadeado.
 - Depois que o escritório **puxa** o extrato pra Importação, ele fica **só pra
   consulta** pro cliente (e ele não pode mais excluí-lo).
 - Nada da parte contábil aparece pro cliente (código no Domínio, conta do
@@ -286,9 +291,9 @@ npm run test -w backend
 cd parser && .venv\Scripts\pytest
 ```
 
-Hoje: **262 testes no backend** (+2 que pulam sem os arquivos locais), incluindo as
+Hoje: **287 testes no backend** (+2 que pulam sem os arquivos locais), incluindo as
 regras de acesso e as migrations num Postgres de verdade (PGlite: `src/db/*.test.ts`),
-e **118 no parser**.
+e **134 no parser**.
 
 `backend/src/dominio/exporter.test.ts` tem um **golden test** que compara o
 arquivo gerado com um export real do Domínio (roda se `C:\SEFIP\lancto.txt`
@@ -375,6 +380,24 @@ no mesmo dia; migrations `0023` e `0024`):
 - Telas: 10/50/100 itens por página (guardado), tabelas com rolagem própria e
   cabeçalho fixo, Enter/Shift+Enter na Classificação, histórico sem teto.
 - Limpeza: saíram as migrations do Contábil e a tabela `chart_accounts`.
+
+**Descrições completas, Dashboard e aprovação do cliente** (2026-11-12 e 13, no
+ar em 2026-11-13; migrations `0025` e `0026`):
+
+- **Descrição completa do lançamento** em todos os extratos de
+  `C:\SEFIP\EXTRATOS` (totais sem mudança): Nubank em PDF junta os pedaços da
+  descrição mesmo com linha em branco ou quebra de página no meio; PDFs em
+  colunas (Bradesco, Sicoob, BB, C6 e o leitor genérico) leem a descrição pela
+  posição das palavras (`parser/app/parsers/celulas.py`), com o complemento da
+  linha de baixo e da página seguinte; BB Consultas sem o nº do documento; C6
+  sem o "Entrada/Saída PIX" repetido; planilhas juntam complemento, favorecido,
+  CPF/CNPJ e o tipo. O PDF é lido uma vez só (texto e palavras juntos).
+- **Dashboard** da Classificação (ver [Fluxo — Classificação](#fluxo--classificação)):
+  roscas, mapa de árvore, tabela com valor e % e receitas x despesas por mês,
+  tudo no período De/Até.
+- **Aprovação do cliente** (ver [Aprovação do cliente](#aprovação-do-cliente)):
+  o cliente declara que conferiu e aprova o mês; fica registrado quem, quando e
+  o que foi aprovado, e mudança depois da aprovação aparece no Histórico.
 
 ## Uso no dia a dia
 
