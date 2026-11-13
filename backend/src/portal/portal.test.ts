@@ -5,7 +5,7 @@ import request from 'supertest';
 vi.mock('../statements/parserClient.js', () => ({ callParser: vi.fn(), callParserExcel: vi.fn(), lerPlanilha: vi.fn() }));
 import { callParser } from '../statements/parserClient.js';
 import { errorHandler } from '../middleware/error.js';
-import { makeFakeSupabase, type FakeOp } from '../test/fakeSupabase.js';
+import { makeFakeSupabase, type FakeOp, type FakeRpcHandler } from '../test/fakeSupabase.js';
 import { porPapel } from '../routes/papel.js';
 import { portalClientesRouter } from './clientes.js';
 import { portalExtratosRouter } from './extratos.js';
@@ -158,8 +158,8 @@ function banco(op: FakeOp) {
   }
 }
 
-function appCliente() {
-  const fake = makeFakeSupabase(banco, () => ({ error: null }), () => ({ data: 1, error: null }));
+function appCliente(rpc: FakeRpcHandler = () => ({ data: 1, error: null })) {
+  const fake = makeFakeSupabase(banco, () => ({ error: null }), rpc);
   const escritorio = Router().use((_req, res) => {
     res.json({ atendido_por: 'escritorio' });
   });
@@ -346,6 +346,41 @@ describe('portal do cliente — extratos', () => {
     expect((await request(app).post(`/statements/${ST_A}/export`)).status).toBe(403);
     expect((await request(app).patch(`/statements/${ST_A}/transactions`).send({ updates: [] })).status).toBe(403);
     expect((await request(app).patch(`/statements/${ST_A}`).send({ status: 'revisao' })).status).toBe(403);
+  });
+});
+
+describe('portal do cliente — aprovação das classificações', () => {
+  it('aprova: registra pela função do portal com o login e o e-mail dele', async () => {
+    const { app, rpcOps } = appCliente();
+    const res = await request(app).post(`/statements/${ST_A}/aprovacao`);
+    expect(res.status).toBe(200);
+    expect(rpcOps).toEqual([
+      { fn: 'aprovar_classificacao', args: { p_statement: ST_A, p_user: LOGIN, p_email: 'cliente@empresa.com' } },
+    ]);
+    expect(res.body.statement).toMatchObject({ id: ST_A, aprovado_em: null, banco_conta_contabil: null });
+  });
+
+  it('aprova também depois que o escritório puxou pra Importação', async () => {
+    const { app, rpcOps } = appCliente();
+    expect((await request(app).post(`/statements/${ST_PUXADO}/aprovacao`)).status).toBe(200);
+    expect(rpcOps[0]?.fn).toBe('aprovar_classificacao');
+  });
+
+  it('com lançamento sem classificação: 400 com a mensagem do banco', async () => {
+    const { app } = appCliente(() => ({
+      data: null,
+      error: { code: '22023', message: 'Ainda há 2 lançamento(s) sem classificação — classifique todos antes de aprovar.' },
+    }));
+    const res = await request(app).post(`/statements/${ST_A}/aprovacao`);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/2 lançamento\(s\) sem classificação/);
+  });
+
+  it('extrato de outra empresa ou que nasceu na Importação: 404, sem aprovar nada', async () => {
+    const { app, rpcOps } = appCliente();
+    expect((await request(app).post(`/statements/${ST_X}/aprovacao`)).status).toBe(404);
+    expect((await request(app).post(`/statements/${ST_IMPORTACAO}/aprovacao`)).status).toBe(404);
+    expect(rpcOps).toHaveLength(0);
   });
 });
 

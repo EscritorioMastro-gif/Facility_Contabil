@@ -256,6 +256,46 @@ portalExtratosRouter.patch('/:id/classificacao', async (req, res, next) => {
 });
 
 // --------------------------------------------------------------------------- #
+// POST /:id/aprovacao  — o cliente declara que conferiu as classificações do
+// extrato e aprova (migration 0026). Fica registrado o login, o e-mail, a data
+// e a hora; se alguém mexer numa classificação depois, a aprovação deixa de
+// valer até ele aprovar de novo. Vale também depois que o escritório puxou o
+// extrato pra Importação (aprovar não muda nenhum lançamento).
+// --------------------------------------------------------------------------- #
+portalExtratosRouter.post('/:id/aprovacao', async (req, res, next) => {
+  try {
+    const admin = adminDe(req);
+    const userId = req.auth!.userId;
+    const extrato = await extratoDoLogin(admin, userId, req.params.id);
+    if (!['classificacao', 'revisao', 'gerado'].includes(extrato.status as string)) {
+      throw badRequest('Esse extrato ainda não pode ser aprovado.');
+    }
+
+    let email = req.auth!.email;
+    if (!email) {
+      const { data } = await admin.from('cliente_acessos').select('email').eq('user_id', userId).limit(1);
+      email = (data?.[0]?.email as string | undefined) ?? null;
+    }
+
+    const { error } = await admin.rpc('aprovar_classificacao', {
+      p_statement: req.params.id,
+      p_user: userId,
+      p_email: email ?? '',
+    });
+    if (error) {
+      // 22023 = regra da aprovação (lançamento sem classificação etc.): a mensagem já é pro cliente
+      if (error.code === '22023') throw badRequest(error.message);
+      throw mapPgrstError(error, 'aprovar as classificações');
+    }
+
+    const atualizado = await extratoDoLogin(admin, userId, req.params.id);
+    res.json({ statement: paraExtrato(atualizado) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --------------------------------------------------------------------------- #
 // DELETE /:id  — só enquanto o extrato ainda está no módulo Classificação
 // --------------------------------------------------------------------------- #
 portalExtratosRouter.delete('/:id', async (req, res, next) => {

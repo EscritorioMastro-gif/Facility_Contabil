@@ -92,6 +92,12 @@ export type Statement = {
   totais: StatementTotais | Record<string, never>;
   created_at: string;
   updated_at: string;
+  /** última aprovação das classificações pelo cliente (portal) — migration 0026 */
+  aprovado_em?: string | null;
+  aprovado_por_email?: string | null;
+  aprovado_qtd?: number | null;
+  /** última mudança de classificação; depois da aprovação = aprovação não vale mais */
+  classificacao_alterada_em?: string | null;
   client?: Pick<Client, 'id' | 'razao_social' | 'cnpj' | 'dominio_code'> & { conta_width?: number };
 };
 

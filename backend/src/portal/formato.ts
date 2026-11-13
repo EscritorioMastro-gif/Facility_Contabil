@@ -6,7 +6,7 @@
 import type { Empresa } from './acesso.js';
 
 export const STMT_COLS_PORTAL =
-  'id, client_id, arquivo_nome, formato, period_start, period_end, status, origem_modulo, totais, erro_msg, created_at, updated_at';
+  'id, client_id, arquivo_nome, formato, period_start, period_end, status, origem_modulo, totais, erro_msg, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, classificacao_alterada_em';
 
 export const TXN_COLS_PORTAL =
   'id, ordem, data, descricao_raw, valor, direction, ignorado, classificacao_id, classificacao_origem';
@@ -34,6 +34,11 @@ export function paraExtrato(s: Linha, cliente?: ClienteEmbed) {
     erro_msg: s.erro_msg ?? null,
     created_at: s.created_at,
     updated_at: s.updated_at,
+    // aprovação das classificações (o próprio cliente aprova)
+    aprovado_em: s.aprovado_em ?? null,
+    aprovado_por_email: s.aprovado_por_email ?? null,
+    aprovado_qtd: s.aprovado_qtd ?? null,
+    classificacao_alterada_em: s.classificacao_alterada_em ?? null,
     // fluxo contábil — fora do portal
     storage_path: null,
     banco_id: null,

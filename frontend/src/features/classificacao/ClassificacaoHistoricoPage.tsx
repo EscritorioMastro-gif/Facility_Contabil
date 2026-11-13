@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/format';
 import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
 import { useDeleteStatement, useStatementsPaginados } from '@/features/statements/api';
+import { dataHora, situacaoAprovacao } from './aprovacao';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
   parsing: { text: 'lendo', cls: 'bg-slate-100 text-slate-600' },
@@ -97,6 +98,7 @@ export function ClassificacaoHistoricoPage() {
                 <th className="px-4 py-2">Período</th>
                 <th className="px-4 py-2 text-right">Lanç.</th>
                 <th className="px-4 py-2">Status</th>
+                <th className="px-4 py-2">Aprovação do cliente</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
@@ -126,6 +128,9 @@ export function ClassificacaoHistoricoPage() {
                     <td className="px-4 py-2 text-right text-slate-600">{totais?.qtd ?? '—'}</td>
                     <td className="px-4 py-2">
                       <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${st.cls}`}>{st.text}</span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2">
+                      <SeloAprovacao s={s} ehCliente={ehCliente} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {s.status !== 'parsing' && (
@@ -173,4 +178,30 @@ export function ClassificacaoHistoricoPage() {
       />
     </section>
   );
+}
+
+function SeloAprovacao({ s, ehCliente }: { s: Statement; ehCliente: boolean }) {
+  if (s.status === 'parsing' || s.status === 'erro') return <span className="text-slate-300">—</span>;
+  const situacao = situacaoAprovacao(s);
+  if (situacao === 'aprovado') {
+    return (
+      <span
+        className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700"
+        title={`Aprovado por ${s.aprovado_por_email ?? 'cliente'} em ${dataHora(s.aprovado_em!)}`}
+      >
+        ✓ aprovado {new Date(s.aprovado_em!).toLocaleDateString('pt-BR')}
+      </span>
+    );
+  }
+  if (situacao === 'alterado') {
+    return (
+      <span
+        className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800"
+        title={`Aprovado por ${s.aprovado_por_email ?? 'cliente'} em ${dataHora(s.aprovado_em!)}; classificações alteradas em ${dataHora(s.classificacao_alterada_em!)}`}
+      >
+        alterado após aprovação
+      </span>
+    );
+  }
+  return <span className="text-xs text-slate-400">{ehCliente ? 'falta aprovar' : 'aguardando'}</span>;
 }

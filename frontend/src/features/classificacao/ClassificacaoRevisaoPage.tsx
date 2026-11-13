@@ -9,10 +9,12 @@ import { formatDate, formatMoney } from '@/lib/format';
 import type { Direction, Transaction } from '@/lib/types';
 import { useStatement } from '@/features/statements/api';
 import { StatementSummary } from '@/features/statements/StatementSummary';
-import { buscarSugestoes, useClassificacoes, useSaveClassificacoes } from './api';
+import { buscarSugestoes, useAprovarClassificacao, useClassificacoes, useSaveClassificacoes } from './api';
 import { useClassificacaoDraft, type OrigemMemoria } from './useClassificacaoDraft';
 import { ClassificacaoSelect } from './ClassificacaoSelect';
 import { AdicionarDaListaGeral } from './AdicionarDaListaGeral';
+import { AvisoAprovacao, ModalAprovacao } from './AprovacaoCliente';
+import { situacaoAprovacao } from './aprovacao';
 
 type Filter = 'todas' | 'entrada' | 'saida' | 'pendentes' | 'sugestoes';
 
@@ -24,6 +26,8 @@ export function ClassificacaoRevisaoPage() {
   const navigate = useNavigate();
   const { data, isLoading, error } = useStatement(id);
   const save = useSaveClassificacoes(id);
+  const aprovar = useAprovarClassificacao(id);
+  const [aprovando, setAprovando] = useState(false);
   const [filter, setFilter] = useState<Filter>('saida');
   const [confirmSair, setConfirmSair] = useState(false);
   const [bulkDir, setBulkDir] = useState<Direction>('saida');
@@ -35,7 +39,7 @@ export function ClassificacaoRevisaoPage() {
   });
   // linhas iguais preenchidas junto com a que o operador classificou (pra poder desfazer)
   const [iguais, setIguais] = useState<{ n: number; nome: string; antes: Map<string, string | null> } | null>(null);
-  const { ehCliente } = useAuth();
+  const { ehCliente, user } = useAuth();
 
   const clientId = data?.statement.client_id ?? '';
   const transactions = useMemo(() => data?.transactions ?? [], [data]);
@@ -128,11 +132,72 @@ export function ClassificacaoRevisaoPage() {
   // login de cliente: depois que o escritório puxou o extrato, só consulta
   const somenteLeitura = ehCliente && jaPuxado;
 
+  // Login de cliente: um botão só, "Aprovar", que também salva. Com lançamento
+  // pendente, a janela pergunta se salva o que já classificou ou continua; com
+  // tudo classificado, ele declara que conferiu e aprova (salvando antes).
+  const situacao = situacaoAprovacao(st);
+  const aprovadoSemMudanca = situacao === 'aprovado' && !isDirty;
+  const podeAbrirAprovacao =
+    ehCliente &&
+    ['classificacao', 'revisao', 'gerado'].includes(st.status) &&
+    stats.ativos > 0 &&
+    !aprovadoSemMudanca;
+  const podeAprovar = podeAbrirAprovacao && stats.pend === 0;
+  const ocupado = save.isPending || aprovar.isPending;
+
   function onSave() {
     if (!isDirty) return;
     setIguais(null);
     save.mutate(changes);
   }
+
+  function abrirAprovacao() {
+    setIguais(null);
+    aprovar.reset();
+    save.reset();
+    setAprovando(true);
+  }
+
+  /** "Salvar" na janela de pendentes: grava o que já foi classificado, sem aprovar. */
+  function salvarSemAprovar() {
+    save.mutate(changes, { onSuccess: () => setAprovando(false) });
+  }
+
+  async function confirmarAprovacao() {
+    try {
+      if (isDirty) await save.mutateAsync(changes);
+      await aprovar.mutateAsync();
+      setAprovando(false);
+    } catch {
+      // o erro aparece na janela (save.error / aprovar.error)
+    }
+  }
+
+  const erroAprovacao =
+    aprovar.error instanceof ApiError
+      ? aprovar.error.message
+      : aprovar.error
+        ? String(aprovar.error)
+        : save.error instanceof ApiError
+          ? save.error.message
+          : null;
+
+  const botaoAprovar = ehCliente && (
+    <button
+      className="btn-primary"
+      onClick={abrirAprovacao}
+      disabled={!podeAbrirAprovacao || ocupado}
+      title={
+        aprovadoSemMudanca
+          ? 'Você já aprovou este mês'
+          : stats.pend > 0
+            ? `Salvar o que já classificou — para aprovar, ${stats.pend === 1 ? 'falta 1 lançamento' : `faltam ${stats.pend} lançamentos`}`
+            : 'Salvar e declarar que conferiu as classificações'
+      }
+    >
+      {ocupado ? 'Salvando…' : aprovadoSemMudanca ? 'Aprovado ✓' : isDirty ? `Aprovar (${changes.length})` : 'Aprovar'}
+    </button>
+  );
 
   /**
    * Classificou uma linha → as outras do MESMO extrato com a mesma descrição
@@ -210,11 +275,17 @@ export function ClassificacaoRevisaoPage() {
           >
             Voltar
           </button>
-          <button className="btn-primary" onClick={onSave} disabled={somenteLeitura || !isDirty || save.isPending}>
-            {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
-          </button>
+          {/* cliente salva pelo "Aprovar" */}
+          {!ehCliente && (
+            <button className="btn-primary" onClick={onSave} disabled={!isDirty || save.isPending}>
+              {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
+            </button>
+          )}
+          {botaoAprovar}
         </div>
       </div>
+
+      <AvisoAprovacao st={st} ehCliente={ehCliente} podeAprovar={podeAprovar && !isDirty} />
 
       {jaPuxado && (
         <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
@@ -454,11 +525,13 @@ export function ClassificacaoRevisaoPage() {
         <span className="text-slate-500">
           {isDirty
             ? ehCliente
-              ? 'Salve as alterações.'
+              ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Aprovar" para salvar.`
               : 'Salve as alterações antes de ir pra Importação.'
             : stats.pend > 0
               ? `${stats.pend} lançamento(s) ainda sem classificação.`
-              : `Tudo classificado (${stats.classificados}/${stats.ativos}).`}
+              : ehCliente && situacao !== 'aprovado'
+                ? `Tudo classificado (${stats.classificados}/${stats.ativos}) — falta aprovar o mês.`
+                : `Tudo classificado (${stats.classificados}/${stats.ativos}).`}
         </span>
         <div className="flex gap-2">
           {isDirty && (
@@ -472,6 +545,7 @@ export function ClassificacaoRevisaoPage() {
               Descartar alterações
             </button>
           )}
+          {botaoAprovar}
           {/* puxar pra Importação é do escritório */}
           {!ehCliente && (
             <button
@@ -485,6 +559,20 @@ export function ClassificacaoRevisaoPage() {
           )}
         </div>
       </div>
+
+      <ModalAprovacao
+        open={aprovando}
+        st={st}
+        qtd={stats.ativos}
+        pendentes={stats.pend}
+        email={user?.email ?? null}
+        temAlteracoes={isDirty}
+        busy={ocupado}
+        erro={erroAprovacao}
+        onSalvar={salvarSemAprovar}
+        onAprovar={confirmarAprovacao}
+        onCancelar={() => setAprovando(false)}
+      />
 
       <ConfirmDialog
         open={confirmSair}

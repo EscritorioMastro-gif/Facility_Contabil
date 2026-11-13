@@ -151,6 +151,21 @@ export function useCreateStatementClassificar() {
   });
 }
 
+/** Login de cliente: declara que conferiu as classificações do extrato e aprova (fica registrado quem e quando). */
+export function useAprovarClassificacao(statementId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ statement: StatementDetail['statement'] }>(`/api/statements/${statementId}/aprovacao`, { method: 'POST' }),
+    onSuccess: (data) => {
+      qc.setQueryData(['statements', 'one', statementId], (cur: StatementDetail | undefined) =>
+        cur ? { ...cur, statement: { ...cur.statement, ...data.statement } } : cur,
+      );
+      qc.invalidateQueries({ queryKey: ['statements'] });
+    },
+  });
+}
+
 export function useSaveClassificacoes(statementId: string) {
   const qc = useQueryClient();
   return useMutation({
