@@ -13,8 +13,9 @@ import { MapaArvore, Rosca } from './graficos';
  * empresas dele ou uma; escritório: uma empresa, ou todas as do mesmo cliente.
  * Só lançamentos classificados e não inativados entram nos totais.
  *
- * Três blocos (escolhidos com o user): roscas do mês, mapa de árvore do
- * período (todas as classificações) e tabela + receitas x despesas por mês.
+ * Três blocos (escolhidos com o user): roscas, mapa de árvore (todas as
+ * classificações) e tabela + receitas x despesas por mês — tudo no período
+ * De/Até (o user tirou o seletor de mês só das roscas em 2026-11-13).
  */
 
 const COR_RECEITA = '#1baf7a';
@@ -27,23 +28,8 @@ const MESES_LONGOS = [
 
 const rotuloMes = (m: string) => `${MESES[Number(m.slice(5, 7)) - 1]}/${m.slice(2, 4)}`;
 const nomeMes = (m: string) => `${MESES_LONGOS[Number(m.slice(5, 7)) - 1]}/${m.slice(0, 4)}`;
-
-/** 'AAAA-MM' de `de` até `ate` (no máximo 20 anos). */
-function mesesEntre(de: string, ate: string): string[] {
-  const out: string[] = [];
-  if (!de || !ate || de > ate) return out;
-  let [a, m] = de.split('-').map(Number) as [number, number];
-  for (let i = 0; i < 240; i++) {
-    const s = `${a}-${String(m).padStart(2, '0')}`;
-    if (s > ate) break;
-    out.push(s);
-    if (++m > 12) {
-      m = 1;
-      a++;
-    }
-  }
-  return out;
-}
+/** "Outubro/2026" (um mês só) ou "dez/25 a nov/26" */
+const rotuloPeriodo = (de: string, ate: string) => (de === ate ? nomeMes(de) : `${rotuloMes(de)} a ${rotuloMes(ate)}`);
 
 function mesAtual(deslocamento = 0): string {
   const d = new Date();
@@ -63,8 +49,6 @@ export function DashboardPage() {
   const [grupo, setGrupo] = useState(true);
   const [de, setDe] = useState(mesAtual(-11));
   const [ate, setAte] = useState(mesAtual());
-  // mês das roscas: vazio (ou fora do período) = o último mês do período
-  const [mesRosca, setMesRosca] = useState('');
 
   // escritório precisa escolher a empresa; cliente sem escolha = todas as dele
   const clientId = escolhida || (!ehCliente && empresas?.length === 1 ? empresas[0]!.id : '');
@@ -74,11 +58,6 @@ export function DashboardPage() {
     { client_id: clientId || undefined, grupo: !ehCliente && grupo, de: `${de}-01`, ate: ate ? ultimoDia(ate) : '' },
     { enabled: pronto },
   );
-  const mesesDoPeriodo = useMemo(() => mesesEntre(de, ate), [de, ate]);
-  // sem escolha: o último mês do período que tem lançamento classificado (o mês
-  // corrente costuma estar vazio ou pela metade)
-  const ultimoComDados = data?.meses.filter((m) => mesesDoPeriodo.includes(m.mes)).at(-1)?.mes;
-  const mesSel = mesRosca && mesesDoPeriodo.includes(mesRosca) ? mesRosca : (ultimoComDados ?? ate);
 
   return (
     <section className="space-y-5">
@@ -125,21 +104,6 @@ export function DashboardPage() {
           <span className="mb-1 text-xs text-slate-500">Até</span>
           <input type="month" className="input h-9 w-40" value={ate} onChange={(e) => setAte(e.target.value)} />
         </label>
-        <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Mês das roscas</span>
-          <select
-            className="input h-9 w-44"
-            value={periodoOk ? mesSel : ''}
-            onChange={(e) => setMesRosca(e.target.value)}
-            disabled={!periodoOk}
-          >
-            {[...mesesDoPeriodo].reverse().map((m) => (
-              <option key={m} value={m}>
-                {nomeMes(m)}
-              </option>
-            ))}
-          </select>
-        </label>
         {!periodoOk && <span className="h-9 self-end text-xs text-red-600">O mês inicial tem que vir antes do final.</span>}
       </div>
 
@@ -180,7 +144,7 @@ export function DashboardPage() {
             />
           </div>
 
-          <Graficos data={data} mes={mesSel} />
+          <Graficos data={data} periodo={rotuloPeriodo(de, ate)} />
         </>
       )}
     </section>
@@ -207,32 +171,27 @@ function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode
   );
 }
 
-function Graficos({ data, mes }: { data: Dashboard; mes: string }) {
-  const doMes = data.meses.find((m) => m.mes === mes);
-  const rotulo = rotuloMes(mes);
+/** Tudo no período escolhido em De/Até (pra ver um mês só, De e Até no mesmo mês). */
+function Graficos({ data, periodo }: { data: Dashboard; periodo: string }) {
   return (
     <>
-      <Bloco titulo={`No mês — ${nomeMes(mes)}`}>
+      <Bloco titulo={`Por classificação — ${periodo}`}>
         <Rosca
-          titulo="Receitas no mês"
-          itens={doMes?.receitas ?? []}
-          total={doMes?.receitas_cents ?? 0}
-          periodo={data.receitas}
-          totalPeriodo={data.totais.receitas_cents}
-          vazio={`Nenhuma receita classificada em ${rotulo}.`}
+          titulo="Receitas"
+          itens={data.receitas}
+          total={data.totais.receitas_cents}
+          vazio="Nenhuma receita classificada nesse período."
         />
         <Rosca
-          titulo="Despesas no mês"
-          itens={doMes?.despesas ?? []}
-          total={doMes?.despesas_cents ?? 0}
-          periodo={data.despesas}
-          totalPeriodo={data.totais.despesas_cents}
-          vazio={`Nenhuma despesa classificada em ${rotulo}.`}
+          titulo="Despesas"
+          itens={data.despesas}
+          total={data.totais.despesas_cents}
+          vazio="Nenhuma despesa classificada nesse período."
         />
       </Bloco>
-      <Bloco titulo="No período — todas as classificações">
-        <MapaArvore titulo="Receitas no período" itens={data.receitas} total={data.totais.receitas_cents} tom="receitas" />
-        <MapaArvore titulo="Despesas no período" itens={data.despesas} total={data.totais.despesas_cents} tom="despesas" />
+      <Bloco titulo="Todas as classificações">
+        <MapaArvore titulo="Receitas" itens={data.receitas} total={data.totais.receitas_cents} tom="receitas" />
+        <MapaArvore titulo="Despesas" itens={data.despesas} total={data.totais.despesas_cents} tom="despesas" />
       </Bloco>
       <Bloco titulo="Detalhe do período">
         <Tabela titulo="Receitas por classificação" itens={data.receitas} total={data.totais.receitas_cents} />

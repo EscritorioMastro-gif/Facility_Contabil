@@ -4,11 +4,11 @@ import type { ItemDashboard } from './api';
 
 /**
  * Gráficos do Dashboard da Classificação, desenhados aqui mesmo (sem
- * biblioteca): a rosca do mês e o mapa de árvore do período. Valor e % sempre
+ * biblioteca): a rosca e o mapa de árvore do período. Valor e % sempre
  * juntos; o nome completo fica na legenda (rosca) ou ao passar o mouse (mapa).
  */
 
-/** Paleta categórica em ordem fixa: a cor segue a classificação, não a posição no mês. */
+/** Paleta categórica em ordem fixa (a maior classificação sempre na 1ª cor). */
 const CORES = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
 const COR_DEMAIS = '#b4b2a9';
 /** fatias com cor própria na rosca; o resto vira "Demais" (todas continuam na legenda) */
@@ -22,11 +22,6 @@ const RAMPAS = {
 /** sem centavos — pro centro da rosca e os blocos do mapa, onde o espaço é curto */
 const reais = (c: number) =>
   (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
-
-/** Cor de cada classificação pela posição no período — a mesma em todos os meses. */
-function coresDoPeriodo(itens: ItemDashboard[]): Map<string, string> {
-  return new Map(itens.slice(0, CORES.length).map((i, k) => [i.nome, CORES[k]!]));
-}
 
 // --------------------------------------------------------------------------- #
 // Rosca
@@ -44,29 +39,20 @@ export function Rosca({
   titulo,
   itens,
   total,
-  periodo,
-  totalPeriodo,
   vazio,
 }: {
   titulo: string;
-  /** classificações do mês (maior primeiro), % sobre o total do mês */
+  /** classificações (maior primeiro), % sobre o total */
   itens: ItemDashboard[];
   total: number;
-  /** classificações do período: dão a cor de cada uma */
-  periodo: ItemDashboard[];
-  totalPeriodo: number;
   vazio: string;
 }) {
   const [ativo, setAtivo] = useState<string | null>(null);
-  const cores = useMemo(() => coresDoPeriodo(periodo), [periodo]);
 
   const { fatias, resto } = useMemo(() => {
     const top = itens.slice(0, FATIAS);
     const resto = itens.slice(FATIAS);
-    // classificação grande no mês mas fora das maiores do período: pega uma cor que sobrou
-    const usadas = new Set(top.map((i) => cores.get(i.nome)));
-    const livres = CORES.filter((c) => !usadas.has(c));
-    const fatias: Fatia[] = top.map((i) => ({ ...i, chave: i.nome, cor: cores.get(i.nome) ?? livres.shift() ?? COR_DEMAIS }));
+    const fatias: Fatia[] = top.map((i, k) => ({ ...i, chave: i.nome, cor: CORES[k]! }));
     const demais = resto.reduce((a, i) => a + i.total_cents, 0);
     if (resto.length)
       fatias.push({
@@ -77,7 +63,7 @@ export function Rosca({
         cor: COR_DEMAIS,
       });
     return { fatias, resto };
-  }, [itens, cores, total]);
+  }, [itens, total]);
 
   const arcos = useMemo(() => {
     let acc = 0;
@@ -124,11 +110,7 @@ export function Rosca({
                 {reais(foco ? foco.total_cents : total)}
               </span>
               <span className="max-w-[6.5rem] text-[11px] leading-tight text-slate-500">
-                {foco
-                  ? `${pct(foco.percentual)} do mês`
-                  : totalPeriodo > 0
-                    ? `${pct((total / totalPeriodo) * 100)} do período`
-                    : ''}
+                {foco ? `${pct(foco.percentual)} do total` : 'total'}
               </span>
             </div>
           </div>
