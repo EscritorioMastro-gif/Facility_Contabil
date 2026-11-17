@@ -23,7 +23,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
         onClick={onNavigate}
         className="flex items-center gap-2.5 px-5 pb-4 pt-5 text-cream"
       >
-        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-300 text-sm font-bold text-brand-900">
+        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/[0.14] text-sm font-bold text-white">
           FC
         </span>
         <span className="text-[15px] font-semibold leading-tight">Facility Contábil</span>
@@ -58,8 +58,8 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive
-                    ? 'border-brand-300 bg-white/[0.08] text-white'
-                    : 'border-transparent text-white/60 hover:bg-white/[0.05] hover:text-white'
+                    ? 'border-brand-300 bg-white/[0.14] text-white'
+                    : 'border-transparent text-white/80 hover:bg-white/[0.08] hover:text-white'
                 }`}
               >
                 {Icon && (
@@ -82,7 +82,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                         `block rounded-md px-2.5 py-1.5 text-[13px] transition-colors ${
                           subActive
                             ? 'font-medium text-white'
-                            : 'text-white/45 hover:text-white/80'
+                            : 'text-white/60 hover:text-white/90'
                         }`
                       }
                     >

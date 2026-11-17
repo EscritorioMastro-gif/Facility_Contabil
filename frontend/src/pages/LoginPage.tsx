@@ -68,7 +68,7 @@ export function LoginPage() {
       {/* painel da marca */}
       <div className="relative hidden flex-col overflow-hidden bg-brand-800 p-10 text-white lg:flex">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-300 text-sm font-bold text-brand-900">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/[0.14] text-sm font-bold text-white">
             FC
           </span>
           <span className="text-base font-semibold">Facility Contábil</span>

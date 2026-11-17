@@ -8,7 +8,7 @@
 export function TabelaRolavel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`card max-h-[72vh] overflow-auto overscroll-contain [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-slate-50 [&_thead_th]:shadow-[inset_0_-1px_0_#e2e8f0] ${className}`}
+      className={`card max-h-[72vh] overflow-auto overscroll-contain [&_thead_th]:sticky [&_thead_th]:top-0 [&_thead_th]:z-10 [&_thead_th]:bg-slate-50 [&_thead_th]:shadow-[inset_0_-1px_0_#E2E9EA] ${className}`}
     >
       {children}
     </div>

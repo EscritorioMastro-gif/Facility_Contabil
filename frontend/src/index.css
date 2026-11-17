@@ -17,7 +17,7 @@ body {
       focus:ring-offset-cream disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply btn bg-brand-800 text-cream hover:bg-brand-900;
+    @apply btn bg-brand-700 text-white hover:bg-brand-800;
   }
   .btn-accent {
     @apply btn bg-brand-300 text-brand-900 hover:bg-brand-400;
