@@ -8,11 +8,13 @@
 # se o Render der outro endereço a algum serviço, ajuste PARSER_URL,
 # FRONTEND_ORIGIN, VITE_API_URL e VITE_PARSER_URL (e o connect-src da CSP) abaixo.
 #
-# Plano free: cada serviço dorme após 15 min sem uso e leva ~1 min pra acordar.
-# O Render só acorda com chamada de FORA dele: a API chamando o leitor dormindo
-# recebe 502 na hora — por isso a tela acorda o leitor (VITE_PARSER_URL) e a
-# API espera ele subir antes de desistir.
-# Pra uso diário, mude `plan` da API e do leitor pra `starter`.
+# Plano: API e leitor no `starter` (0,5 CPU / 512 MB, pago por hora, ~US$ 7/mês
+# cada) desde 2026-11-17 — não dormem. A tela é site estático (grátis).
+# Este arquivo manda no plano: se voltar pra `free`, a sincronização do
+# Blueprint rebaixa os serviços. No free cada serviço dorme após 15 min sem uso
+# e leva ~1 min pra acordar; por isso a tela ainda acorda o leitor
+# (VITE_PARSER_URL) e a API espera ele subir antes de desistir — inofensivo no
+# starter, e mantém o sistema funcionando se um dia voltar pro free.
 # ==========================================================================
 
 envVarGroups:
@@ -29,7 +31,7 @@ services:
   - type: web
     name: facility-contabil-mastro-parser
     runtime: python
-    plan: free
+    plan: starter
     region: virginia
     rootDir: parser
     buildCommand: pip install -r requirements.txt
@@ -47,7 +49,7 @@ services:
   - type: web
     name: facility-contabil-mastro-api
     runtime: node
-    plan: free
+    plan: starter
     region: virginia
     # --include=dev: o build (tsc) precisa das devDependencies mesmo com NODE_ENV=production
     buildCommand: npm ci --include=dev && npm run build -w backend
