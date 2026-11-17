@@ -69,42 +69,47 @@ export function DashboardPage() {
         </p>
       </div>
 
-      <div className="card flex flex-wrap items-end gap-3 p-4 text-sm">
-        <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Empresa</span>
-          <select
-            className="input h-9 min-w-[16rem]"
-            value={clientId}
-            onChange={(e) => setEscolhida(e.target.value)}
-            disabled={carregandoEmpresas}
-          >
-            {ehCliente ? (
-              <option value="">Todas as minhas empresas</option>
-            ) : (
-              <option value="">{carregandoEmpresas ? 'Carregando…' : 'Escolha a empresa…'}</option>
-            )}
-            {empresas?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.razao_social}
-              </option>
-            ))}
-          </select>
-        </label>
-        {!ehCliente && (
-          <label className="flex h-9 items-center gap-2 text-slate-600" title="Empresas liberadas para o mesmo login de cliente">
-            <input type="checkbox" checked={grupo} onChange={(e) => setGrupo(e.target.checked)} />
-            Somar todas as empresas do mesmo cliente
+      <div className="card space-y-3 p-4 text-sm">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col">
+            <span className="mb-1 text-xs text-slate-500">Empresa</span>
+            <select
+              className="input h-9 min-w-[16rem]"
+              value={clientId}
+              onChange={(e) => setEscolhida(e.target.value)}
+              disabled={carregandoEmpresas}
+            >
+              {ehCliente ? (
+                <option value="">Todas as minhas empresas</option>
+              ) : (
+                <option value="">{carregandoEmpresas ? 'Carregando…' : 'Escolha a empresa…'}</option>
+              )}
+              {empresas?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.razao_social}
+                </option>
+              ))}
+            </select>
           </label>
-        )}
-        <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">De</span>
-          <input type="month" className="input h-9 w-40" value={de} onChange={(e) => setDe(e.target.value)} />
-        </label>
-        <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Até</span>
-          <input type="month" className="input h-9 w-40" value={ate} onChange={(e) => setAte(e.target.value)} />
-        </label>
-        {!periodoOk && <span className="h-9 self-end text-xs text-red-600">O mês inicial tem que vir antes do final.</span>}
+          {!ehCliente && (
+            <label className="flex h-9 items-center gap-2 text-slate-600" title="Empresas liberadas para o mesmo login de cliente">
+              <input type="checkbox" checked={grupo} onChange={(e) => setGrupo(e.target.checked)} />
+              Somar todas as empresas do mesmo cliente
+            </label>
+          )}
+        </div>
+        {/* De e Até sempre juntos, numa linha própria abaixo da empresa */}
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col">
+            <span className="mb-1 text-xs text-slate-500">De</span>
+            <input type="month" className="input h-9 w-40" value={de} onChange={(e) => setDe(e.target.value)} />
+          </label>
+          <label className="flex flex-col">
+            <span className="mb-1 text-xs text-slate-500">Até</span>
+            <input type="month" className="input h-9 w-40" value={ate} onChange={(e) => setAte(e.target.value)} />
+          </label>
+          {!periodoOk && <span className="h-9 self-end text-xs text-red-600">O mês inicial tem que vir antes do final.</span>}
+        </div>
       </div>
 
       {!pronto ? (
