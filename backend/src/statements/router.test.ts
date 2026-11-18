@@ -49,6 +49,8 @@ const parseResult = {
   format: 'ofx' as const,
   bank_id: '0260',
   account_id: '123-4',
+  // titular = o CNPJ do cliente c1 dos testes: passa direto pelas travas (travas.test.ts testa as travas)
+  titular_doc: '11222333000181',
   period_start: '2026-07-01',
   period_end: '2026-07-31',
   warnings: [],
@@ -69,7 +71,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops, storageOps } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'revisao', totais: {} }),
         'transactions.insert': () => null,
@@ -108,7 +110,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'mapping_rules.select': () => [
           {
             id: 'mem-1',
@@ -152,7 +154,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'mapping_rules.select': () => [
           { id: 'a', direction: 'saida', match_type: 'exact', pattern: 'PIX ENVIADO', conta_contabil: '5010', hist_code: '186', prioridade: 50, hits: 1 },
           { id: 'b', direction: 'saida', match_type: 'exact', pattern: 'PIX ENVIADO', conta_contabil: '4020', hist_code: '186', prioridade: 50, hits: 8 },
@@ -179,7 +181,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1', saldo_inicial: '1000.00' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181', saldo_inicial: '1000.00' }),
         // a trava de duplicado não acha nada; qualquer outra leitura devolveria um extrato anterior
         'statements.select': (op) =>
           op.filters.some(([c]) => c === 'impressao') ? [] : [{ saldo_final: '5000.00', period_end: '2026-06-30' }],
@@ -215,7 +217,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1', saldo_inicial: '1000.00' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181', saldo_inicial: '1000.00' }),
         'statements.select': () => [{ saldo_final: '5000.00', period_end: '2026-06-30' }],
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'revisao', totais: {} }),
@@ -279,7 +281,7 @@ describe('POST /statements', () => {
   });
 
   it('422 de formato desconhecido', async () => {
-    const { app } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1' }) }));
+    const { app } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }) }));
     const res = await request(app)
       .post('/statements')
       .field('client_id', '11111111-1111-1111-1111-111111111111')
@@ -293,7 +295,7 @@ describe('POST /statements', () => {
     mockedParser.mockResolvedValue({ ...parseResult, transactions: Array.from({ length: 10_001 }, () => t) });
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => null,
       }),
@@ -424,6 +426,7 @@ describe('POST /statements/excel', () => {
     format: 'xlsx' as const,
     bank_id: null,
     account_id: null,
+    titular_doc: null,
     warnings: ['1 linha(s) tiradas da importação por você: 4'],
   };
 
@@ -432,6 +435,8 @@ describe('POST /statements/excel', () => {
       .post('/statements/excel')
       .field('client_id', CLIENTE)
       .field('banco_conta_contabil', '10002')
+      // planilha do cliente não diz de qual empresa é: o operador confirma (travas.ts)
+      .field('confirmo_empresa', 'true')
       .field('mapeamento', typeof mapeamento === 'string' ? mapeamento : JSON.stringify(mapeamento))
       .attach('file', Buffer.from('PK'), nome);
   }
@@ -440,7 +445,7 @@ describe('POST /statements/excel', () => {
     mockedParserExcel.mockResolvedValue(lidos);
     const { app, ops, storageOps } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1', saldo_inicial: '100.00' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181', saldo_inicial: '100.00' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': (op) => ({ id: 's1', status: 'revisao', ...(op.payload as object) }),
         'transactions.insert': () => null,
@@ -482,7 +487,7 @@ describe('POST /statements/excel', () => {
     mockedParserExcel.mockResolvedValue(lidos);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'revisao' }),
         'transactions.select': () => [],
@@ -500,7 +505,7 @@ describe('POST /statements/excel', () => {
   });
 
   it('400 quando a escolha de colunas não serve — antes de criar o extrato', async () => {
-    const { app, ops } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1' }) }));
+    const { app, ops } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }) }));
     const invalidos = [
       '{nao é json',
       { ...MAPA, valor: 0 }, // Data e Valor na mesma coluna
@@ -518,7 +523,7 @@ describe('POST /statements/excel', () => {
   });
 
   it('400 quando o arquivo não é planilha Excel', async () => {
-    const { app } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1' }) }));
+    const { app } = appWith(handlerFor({ 'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }) }));
     const res = await importar(app, MAPA, 'extrato.csv');
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/planilha Excel/);
@@ -533,7 +538,7 @@ describe('POST /statements/excel', () => {
     });
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => null,
       }),
@@ -553,7 +558,7 @@ describe('POST /statements/classificar', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' }),
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'classificacao', totais: {} }),
         'transactions.insert': () => null,
@@ -581,7 +586,7 @@ describe('POST /statements/classificar', () => {
     mockedParser.mockResolvedValue(parseResult);
     const { app, ops } = appWith(
       handlerFor({
-        'clients.select': () => ({ id: 'c1', saldo_inicial: '1000.00' }),
+        'clients.select': () => ({ id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181', saldo_inicial: '1000.00' }),
         'statements.select': () => [{ saldo_final: '5000.00', period_end: '2026-06-30' }],
         'statements.insert': () => ({ id: 's1' }),
         'statements.update': () => ({ id: 's1', status: 'classificacao', totais: {} }),
@@ -640,6 +645,7 @@ describe('POST /statements/:id/reimport', () => {
         'statements.select': () => ({
           id: 's1',
           client_id: 'c1',
+          client: { id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' },
           hist_code_entrada: '138',
           hist_code_saida: '186',
           saldo_inicial: '500.00',
@@ -682,6 +688,7 @@ describe('POST /statements/:id/reimport', () => {
         'statements.select': () => ({
           id: 's1',
           client_id: 'c1',
+          client: { id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' },
           hist_code_entrada: '138',
           hist_code_saida: '186',
           saldo_inicial: '0',
@@ -709,6 +716,7 @@ describe('POST /statements/:id/reimport', () => {
         'statements.select': () => ({
           id: 's1',
           client_id: 'c1',
+          client: { id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' },
           hist_code_entrada: '138',
           hist_code_saida: '186',
           saldo_inicial: '0',
@@ -734,6 +742,7 @@ describe('POST /statements/:id/reimport', () => {
         'statements.select': () => ({
           id: 's1',
           client_id: 'c1',
+          client: { id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' },
           hist_code_entrada: '138',
           hist_code_saida: '186',
           saldo_inicial: '0',

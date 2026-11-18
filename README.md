@@ -53,11 +53,11 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
 ## Fluxo — Classificação
 
 1. Escolhe o cliente e sobe o extrato (mesmo parser da Importação) — aqui não
-   pede conta do banco nem código de histórico, só o essencial pra ler. O
-   **mesmo extrato não entra duas vezes** (nem em outro formato, nem pelo outro
-   módulo): mesmos lançamentos (data, valor e tipo) da mesma empresa = recusado,
-   com o atalho pro extrato que já está lá (`statements.impressao`, migration
-   `0023`). O período no topo é o **do extrato** (o impresso pelo banco ou o do
+   pede conta do banco nem código de histórico, só o essencial pra ler. Antes
+   de gravar, o extrato passa pelas [travas de entrada](#travas-na-entrada-do-extrato):
+   o **mesmo extrato não entra duas vezes** (em nenhuma empresa), extrato de
+   **outra empresa** é recusado e extrato que **repete o período** de outro é
+   barrado. O período no topo é o **do extrato** (o impresso pelo banco ou o do
    nome do arquivo; senão o mês inteiro dos lançamentos).
 2. Classifica cada lançamento por categoria (não por conta contábil) usando a
    **lista própria** do cliente, escolhida da **Lista geral** do escritório
@@ -113,6 +113,52 @@ classificação depois, o extrato aparece como **alterado após a aprovação** 
 cliente aprovar de novo. O escritório vê a situação no Histórico e no topo da tela
 de classificação; só o portal aprova (o login do escritório não consegue marcar
 aprovação, nem direto no banco).
+
+### Travas na entrada do extrato
+
+Migration `0027`, regras em `backend/src/statements/travas.ts`. Valem em toda
+entrada de extrato — Importação, Importação Excel, Classificação (escritório e
+portal do cliente) e Reimportar. Nasceu de um caso real: o login de um cliente
+com várias empresas subia o extrato da JUNIOR CONFECÇÃO na VALTER CONFECÇÃO
+sem aviso nenhum.
+
+1. **Mesmo extrato, nunca duas vezes** — mesmos lançamentos (data, valor e tipo,
+   em qualquer formato) já importados em **qualquer empresa do escritório** =
+   recusado, dizendo onde está (`statements.impressao`, `0023`). Nem o
+   escritório libera.
+2. **Empresa certa** — o leitor tira do extrato o **CNPJ/CPF do titular** e o
+   **nº da conta** do cabeçalho (`parser/app/parsers/titular.py`, regra herdada
+   da rotina Extrator de Extrato Bancário: só número com o rótulo CNPJ/CPF,
+   nunca o da contraparte de um Pix, do banco ou de um fundo). Medido em
+   2026-11-18 em 480 PDFs reais: 423 com o titular certo, 35 sem documento (29
+   com a conta) e 19 que eram **extratos de outra empresa arquivados na pasta
+   errada** — o leitor acertou.
+   - CNPJ da empresa escolhida (ou mesma raiz — filial —, ou o CPF do MEI que
+     está na razão social) → entra.
+   - CNPJ de **outra empresa cadastrada** → recusa: *"Este extrato é da JUNIOR
+     CONFECÇÃO… e você está enviando na VALTER CONFECÇÃO"*. Se o login também
+     tem a outra empresa, aparece **Enviar na JUNIOR CONFECÇÃO**. Pro cliente,
+     empresa que ele não vê nunca tem o nome revelado.
+   - CNPJ/CPF de **ninguém cadastrado** (ex.: conta no CPF do sócio) → o cliente
+     não envia (fala com o escritório); o escritório **libera** e o documento
+     fica ligado àquela empresa dali em diante.
+   - Sem CNPJ, pela **conta**: conta que já entrou nesta empresa → entra; que é
+     de outra → recusa; nunca vista → o usuário **confirma uma vez** que é desta
+     empresa e as próximas entram direto.
+   - Sem CNPJ e sem conta (OFX/CSV sem cabeçalho, planilha do cliente) → o
+     usuário marca **"Confirmo que este extrato é da …"**.
+   A ligação documento/conta → empresa sai dos próprios extratos gravados
+   (`statements.titular_doc` / `conta_chave`): excluir o extrato desfaz junto.
+3. **Extrato sobreposto** — 80% ou mais dos lançamentos já estão em outro
+   extrato da mesma empresa (quinzena e depois o mês inteiro, mês e depois o
+   trimestre) → recusa mostrando em qual (`sobreposicao_extrato`, `0027`).
+   Abaixo disso entra (duas contas da mesma empresa podem ter um ou outro
+   lançamento igual).
+
+Quem resolve: a **confirmação da empresa** o próprio usuário faz; **liberar**
+(outra empresa, documento desconhecido, sobreposto) só o escritório, com um
+clique, e fica registrado em `statements.conferencia` quem e quando — junto com
+como o extrato foi identificado (titular, conta, confirmado ou liberado).
 
 ## Acesso do cliente
 
@@ -398,6 +444,13 @@ ar em 2026-11-13; migrations `0025` e `0026`):
 - **Aprovação do cliente** (ver [Aprovação do cliente](#aprovação-do-cliente)):
   o cliente declara que conferiu e aprova o mês; fica registrado quem, quando e
   o que foi aprovado, e mudança depois da aprovação aparece no Histórico.
+
+**Travas na entrada do extrato** (2026-11-18; migration `0027` já aplicada no
+Supabase em 18/11 — **API, tela e leitor ainda não publicados**): extrato de outra empresa recusado pelo CNPJ do titular ou pela
+conta, mesmo extrato barrado em todas as empresas do escritório, extrato
+sobreposto barrado, confirmação da empresa quando o extrato não diz de quem é e
+liberação registrada pelo escritório. Ver
+[Travas na entrada do extrato](#travas-na-entrada-do-extrato).
 
 ## Uso no dia a dia
 

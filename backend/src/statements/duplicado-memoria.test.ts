@@ -43,7 +43,16 @@ function handlerFor(map: Record<string, (op: FakeOp) => unknown>): FakeHandler {
 const temFiltro = (op: FakeOp, col: string) => op.filters.some(([c]) => c === col);
 
 function lido(transactions: ParseResult['transactions']): ParseResult {
-  return { format: 'ofx', bank_id: null, account_id: null, period_start: '2026-10-01', period_end: '2026-10-31', warnings: [], transactions };
+  return {
+    format: 'ofx',
+    bank_id: null,
+    account_id: null,
+    titular_doc: '11222333000181',
+    period_start: '2026-10-01',
+    period_end: '2026-10-31',
+    warnings: [],
+    transactions,
+  };
 }
 const TXNS: ParseResult['transactions'] = [
   { date: '2026-10-02', description: 'ENERGISA CONTA 10/2026', amount_cents: 15_000, direction: 'saida', raw: {} },
@@ -53,6 +62,8 @@ const TXNS: ParseResult['transactions'] = [
 
 const JA_IMPORTADO = {
   id: 's-antigo',
+  client_id: CID,
+  client: { razao_social: 'EMPRESA' },
   arquivo_nome: 'outubro.pdf',
   period_start: '2026-10-01',
   period_end: '2026-10-31',
@@ -64,7 +75,7 @@ const JA_IMPORTADO = {
 /** Banco da importação nova; `repetido` = já existe extrato com os mesmos lançamentos. */
 function banco(repetido: boolean) {
   return handlerFor({
-    'clients.select': () => ({ id: CID, saldo_inicial: '0' }),
+    'clients.select': () => ({ id: CID, razao_social: 'EMPRESA', cnpj: '11222333000181', saldo_inicial: '0' }),
     'statements.select': (op) => (temFiltro(op, 'impressao') ? (repetido ? [JA_IMPORTADO] : []) : null),
     'statements.insert': () => ({ id: 's-novo' }),
     'statements.update': (op) => ({ id: 's-novo', status: 'revisao', totais: {}, ...(op.payload as object) }),
@@ -109,11 +120,13 @@ describe('trava de extrato duplicado', () => {
     expect(res.body.details).toEqual({
       code: 'extrato_duplicado',
       statement_id: 's-antigo',
+      client_id: CID,
       status: 'classificacao',
       origem_modulo: 'classificacao',
     });
     const busca = ops.find((o) => o.table === 'statements' && temFiltro(o, 'impressao'))!;
-    expect(busca.filters).toContainEqual(['client_id', CID]);
+    // em todas as empresas do escritório, não só nesta (2026-11-18)
+    expect(busca.filters).toContainEqual(['owner_id', 'esc-1']);
     expect(busca.filters).toContainEqual(['impressao', impressaoDoExtrato(TXNS)]);
     expect(busca.notFilters).toContainEqual({ col: 'status', op: 'eq', val: 'erro' });
     expect(busca.notFilters).toContainEqual({ col: 'id', op: 'eq', val: 's-novo' });
@@ -152,7 +165,16 @@ describe('trava de extrato duplicado', () => {
         'statements.select': (op) =>
           temFiltro(op, 'impressao')
             ? [JA_IMPORTADO]
-            : { id: 's1', client_id: CID, hist_code_entrada: '1', hist_code_saida: '2', saldo_inicial: '0', status: 'revisao', excel_mapeamento: null },
+            : {
+                id: 's1',
+                client_id: CID,
+                client: { id: CID, razao_social: 'EMPRESA', cnpj: '11222333000181' },
+                hist_code_entrada: '1',
+                hist_code_saida: '2',
+                saldo_inicial: '0',
+                status: 'revisao',
+                excel_mapeamento: null,
+              },
       }),
     );
     const res = await request(app).post('/statements/s1/reimport').attach('file', Buffer.from('<OFX></OFX>'), 'outro.ofx');

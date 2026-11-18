@@ -13,7 +13,10 @@ export type ParsedTransaction = {
 export type ParseResult = {
   format: 'pdf' | 'ofx' | 'csv' | 'xls' | 'xlsx';
   bank_id: string | null;
+  /** nº da conta: ACCTID do OFX ou o do cabeçalho do PDF/CSV */
   account_id: string | null;
+  /** CNPJ/CPF do titular (só dígitos), quando o leitor achou com segurança — travas.ts */
+  titular_doc?: string | null;
   period_start: string | null;
   period_end: string | null;
   transactions: ParsedTransaction[];

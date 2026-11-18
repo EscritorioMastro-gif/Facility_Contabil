@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
 import { duplicado, ErroImportacao } from '@/features/statements/ErroImportacao';
+import { travasDoErro, type RespostasTravas } from '@/features/statements/travas';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Planilha } from '@/lib/types';
 import { FileDrop } from '@/components/FileDrop';
@@ -117,9 +118,9 @@ export function ExcelImportPage() {
     });
   }
 
-  function importar() {
+  function importar(respostas?: RespostasTravas) {
     if (!lida || !mapeamento || !resumo.lancamentos) return;
-    createMut.mutate({ ...cab.dados, file: lida.file, mapeamento }, { onSuccess: (r) => setResult(r) });
+    createMut.mutate({ ...cab.dados, file: lida.file, mapeamento, respostas }, { onSuccess: (r) => setResult(r) });
   }
 
   function recomecar() {
@@ -168,7 +169,7 @@ export function ExcelImportPage() {
             <button className="btn-ghost" onClick={() => setEtapa('dados')} disabled={createMut.isPending}>
               ← Voltar
             </button>
-            <button className="btn-primary" onClick={importar} disabled={!podeImportar}>
+            <button className="btn-primary" onClick={() => importar()} disabled={!podeImportar}>
               {createMut.isPending
                 ? 'Importando…'
                 : `Importar ${resumo.lancamentos} lançamento${resumo.lancamentos === 1 ? '' : 's'}`}
@@ -225,8 +226,8 @@ export function ExcelImportPage() {
             10.000 lançamentos por importação.
           </p>
         )}
-        {duplicado(createMut.error) ? (
-          <ErroImportacao err={createMut.error} />
+        {duplicado(createMut.error) || travasDoErro(createMut.error) ? (
+          <ErroImportacao err={createMut.error} enviando={createMut.isPending} onReenviar={(r) => importar(r)} />
         ) : (
           erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>
         )}

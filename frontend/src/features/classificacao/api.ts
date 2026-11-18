@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Classificacao, ClassificacaoGeral, Direction, Transaction } from '@/lib/types';
 import type { StatementDetail } from '@/features/statements/api';
+import { anexarRespostas, type RespostasTravas } from '@/features/statements/travas';
 
 export type ClassificarResult = StatementDetail & { warnings: string[] };
 
@@ -135,6 +136,8 @@ export type CreateClassificarInput = {
   client_id: string;
   pdf_password?: string;
   file: File;
+  /** respostas às travas de entrada, no reenvio (statements/travas.ts) */
+  respostas?: RespostasTravas;
 };
 
 export function useCreateStatementClassificar() {
@@ -145,6 +148,7 @@ export function useCreateStatementClassificar() {
       fd.append('file', input.file);
       fd.append('client_id', input.client_id);
       if (input.pdf_password) fd.append('pdf_password', input.pdf_password);
+      anexarRespostas(fd, input.respostas);
       return api<ClassificarResult>('/api/statements/classificar', { method: 'POST', body: fd });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['statements'] }),

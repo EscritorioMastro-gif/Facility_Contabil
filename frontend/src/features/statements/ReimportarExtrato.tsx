@@ -1,8 +1,9 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
-import { ApiError } from '@/lib/api';
 import { useReimportStatement } from './api';
+import { ErroImportacao } from './ErroImportacao';
+import type { RespostasTravas } from './travas';
 
 const ACCEPT = '.pdf,.ofx,.qfx,.csv,.txt,.xls,.xlsx';
 
@@ -44,13 +45,6 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
   const [pdfPassword, setPdfPassword] = useState('');
 
   const isPdf = file?.name.toLowerCase().endsWith('.pdf');
-  const err =
-    reimport.error instanceof ApiError
-      ? reimport.error.message +
-        (reimport.error.details ? ` (${JSON.stringify(reimport.error.details)})` : '')
-      : reimport.error
-        ? String(reimport.error)
-        : null;
 
   function fechar() {
     if (reimport.isPending) return;
@@ -59,10 +53,10 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
     reimport.reset();
   }
 
-  function confirmar() {
+  function confirmar(respostas?: RespostasTravas) {
     if (!file) return;
     reimport.mutate(
-      { file, pdf_password: pdfPassword || undefined },
+      { file, pdf_password: pdfPassword || undefined, respostas },
       { onSuccess: () => navigate(`/revisao/${statementId}`) },
     );
   }
@@ -107,7 +101,11 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
           </div>
         )}
 
-        {err && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+        {reimport.error != null && (
+          <div className="mt-3">
+            <ErroImportacao err={reimport.error} enviando={reimport.isPending} onReenviar={(r) => confirmar(r)} />
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button className="btn-ghost" onClick={fechar} disabled={reimport.isPending}>
@@ -115,7 +113,7 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
           </button>
           <button
             className="btn bg-red-600 text-white hover:bg-red-700"
-            onClick={confirmar}
+            onClick={() => confirmar()}
             disabled={reimport.isPending}
           >
             {reimport.isPending ? 'Lendo…' : 'Reimportar'}

@@ -891,6 +891,22 @@ def _result(text: str, txns: list[NormalizedTransaction], seen: list[date]) -> P
 
 def parse_pdf(content: bytes, password: str | None = None) -> ParseResult:
     text, palavras = _ler_pdf(content, password)
+    return _com_titular(_parse_pdf_lido(content, password, text, palavras), text)
+
+
+def _com_titular(r: ParseResult, text: str) -> ParseResult:
+    """De quem é o extrato (titular.py) — nunca derruba a leitura dos lançamentos."""
+    from .titular import conta_do_cabecalho, documento_do_titular
+
+    try:
+        r.titular_doc = documento_do_titular(text)
+        r.account_id = r.account_id or conta_do_cabecalho(text)
+    except Exception:  # noqa: BLE001
+        pass
+    return r
+
+
+def _parse_pdf_lido(content: bytes, password: str | None, text: str, palavras: list[list[dict]]) -> ParseResult:
 
     if _looks_like_mercadopago(text):
         r = _parse_mercadopago_pdf(content, password, text)

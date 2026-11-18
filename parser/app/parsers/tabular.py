@@ -98,13 +98,30 @@ def rows_to_result(rows: Rows, fmt: str) -> ParseResult:
     if not txns:
         warnings.append("nenhuma transação reconhecida nas linhas de dados")
 
-    return ParseResult(
-        format=fmt,
-        period_start=min(seen).isoformat() if seen else None,
-        period_end=max(seen).isoformat() if seen else None,
-        transactions=txns,
-        warnings=warnings,
+    return _com_titular(
+        ParseResult(
+            format=fmt,
+            period_start=min(seen).isoformat() if seen else None,
+            period_end=max(seen).isoformat() if seen else None,
+            transactions=txns,
+            warnings=warnings,
+        ),
+        rows[: header_idx if header_idx is not None else 0],
     )
+
+
+def _com_titular(r: ParseResult, cabecalho: Rows) -> ParseResult:
+    """Titular/conta lidos SÓ das linhas antes da tabela de lançamentos: dentro
+    dela, CNPJ e "Conta: ..." costumam ser da contraparte de um Pix."""
+    from .titular import conta_do_cabecalho, documento_do_titular
+
+    texto = "\n".join(" ".join(str(c).strip() for c in row if str(c).strip()) for row in cabecalho[:40])
+    try:
+        r.titular_doc = documento_do_titular(texto)
+        r.account_id = r.account_id or conta_do_cabecalho(texto)
+    except Exception:  # noqa: BLE001
+        pass
+    return r
 
 
 # --------------------------------------------------------------------------- #
@@ -334,9 +351,12 @@ def _try_bb_layout(rows: Rows, fmt: str) -> ParseResult | None:
 
     if not txns:
         return None
+    # agencia;conta nas duas primeiras colunas de toda linha
+    conta = next((re.sub(r"\D", "", r[1]).lstrip("0") for r in rows if len(r) >= 12 and parse_date(r[3].strip())), "")
     return ParseResult(
         format=fmt,
         bank_id="001",
+        account_id=conta if 4 <= len(conta) <= 20 else None,
         period_start=min(seen).isoformat(),
         period_end=max(seen).isoformat(),
         transactions=txns,

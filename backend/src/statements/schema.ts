@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { money } from '../clients/schema.js';
 import { LIMITE_LINHAS } from '../lib/pgrst.js';
+import { pedidoTravasSchema } from './travas.js';
 
 const conta = z
   .string()
@@ -13,16 +14,19 @@ const histCode = z
   .trim()
   .regex(/^\d{1,6}$/, 'código de histórico deve ser numérico');
 
-/** Campos do multipart no POST /api/statements (tudo chega como string). */
-export const createStatementSchema = z.object({
-  client_id: z.string().uuid(),
-  banco_conta_contabil: conta,
-  hist_code_entrada: histCode.default('138'),
-  hist_code_saida: histCode.default('186'),
-  lote_numero: z.coerce.number().int().min(0).max(99_999_999).default(1),
-  saldo_inicial: money.optional(),
-  pdf_password: z.string().max(200).optional(),
-});
+/** Campos do multipart no POST /api/statements (tudo chega como string).
+ *  `confirmo_empresa` / `liberar`: respostas às travas de entrada (travas.ts). */
+export const createStatementSchema = z
+  .object({
+    client_id: z.string().uuid(),
+    banco_conta_contabil: conta,
+    hist_code_entrada: histCode.default('138'),
+    hist_code_saida: histCode.default('186'),
+    lote_numero: z.coerce.number().int().min(0).max(99_999_999).default(1),
+    saldo_inicial: money.optional(),
+    pdf_password: z.string().max(200).optional(),
+  })
+  .merge(pedidoTravasSchema);
 
 /** Até onde a tela mostra colunas da planilha (A…BH) — igual ao parser. */
 const MAX_COLUNAS = 60;
@@ -68,10 +72,17 @@ export const createStatementExcelSchema = createStatementSchema.omit({ pdf_passw
 
 /** POST /api/statements/classificar — só o essencial; conta do banco e hist
  *  ficam pra quando o extrato for "puxado" pro módulo Importação. */
-export const classificarStatementSchema = z.object({
-  client_id: z.string().uuid(),
-  pdf_password: z.string().max(200).optional(),
-});
+export const classificarStatementSchema = z
+  .object({
+    client_id: z.string().uuid(),
+    pdf_password: z.string().max(200).optional(),
+  })
+  .merge(pedidoTravasSchema);
+
+/** POST /api/statements/:id/reimport — senha do PDF + respostas às travas. */
+export const reimportStatementSchema = z
+  .object({ pdf_password: z.string().max(200).optional() })
+  .merge(pedidoTravasSchema);
 
 export const listStatementsQuerySchema = z.object({
   client_id: z.string().uuid().optional(),

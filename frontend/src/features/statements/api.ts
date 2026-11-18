@@ -1,5 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiDownload, saveBlob } from '@/lib/api';
+import { anexarRespostas, type RespostasTravas } from './travas';
 import type {
   ComplementoModo,
   ExcelMapeamento,
@@ -26,11 +27,14 @@ export type CabecalhoInput = {
 export type CreateStatementInput = CabecalhoInput & {
   pdf_password?: string;
   file: File;
+  /** respostas às travas de entrada, no reenvio (travas.ts) */
+  respostas?: RespostasTravas;
 };
 
 export type CreateStatementExcelInput = CabecalhoInput & {
   file: File;
   mapeamento: ExcelMapeamento;
+  respostas?: RespostasTravas;
 };
 
 function formCabecalho(input: CabecalhoInput & { file: File }): FormData {
@@ -97,6 +101,7 @@ export function useCreateStatement() {
     mutationFn: (input: CreateStatementInput) => {
       const fd = formCabecalho(input);
       if (input.pdf_password) fd.append('pdf_password', input.pdf_password);
+      anexarRespostas(fd, input.respostas);
       return api<ImportResult>('/api/statements', { method: 'POST', body: fd });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['statements'] }),
@@ -129,6 +134,7 @@ export function useCreateStatementExcel() {
     mutationFn: (input: CreateStatementExcelInput) => {
       const fd = formCabecalho(input);
       fd.append('mapeamento', JSON.stringify(input.mapeamento));
+      anexarRespostas(fd, input.respostas);
       return api<ImportResult>('/api/statements/excel', { method: 'POST', body: fd });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['statements'] }),
@@ -156,10 +162,11 @@ export function useDeleteStatements() {
 export function useReimportStatement(statementId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { file: File; pdf_password?: string }) => {
+    mutationFn: (input: { file: File; pdf_password?: string; respostas?: RespostasTravas }) => {
       const fd = new FormData();
       fd.append('file', input.file);
       if (input.pdf_password) fd.append('pdf_password', input.pdf_password);
+      anexarRespostas(fd, input.respostas);
       return api<ImportResult>(`/api/statements/${statementId}/reimport`, {
         method: 'POST',
         body: fd,

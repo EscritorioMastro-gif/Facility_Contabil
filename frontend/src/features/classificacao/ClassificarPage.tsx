@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ErroImportacao } from '@/features/statements/ErroImportacao';
 import { useClients } from '@/features/clients/api';
 import { FileDrop } from '@/components/FileDrop';
+import type { RespostasTravas } from '@/features/statements/travas';
 import { useCreateStatementClassificar } from './api';
 
 export function ClassificarPage() {
@@ -17,13 +18,18 @@ export function ClassificarPage() {
   const isPdf = file?.name.toLowerCase().endsWith('.pdf');
   const canSubmit = clientId && file && !createMut.isPending;
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit || !file) return;
+  function enviar(respostas?: RespostasTravas, empresa = clientId) {
+    if (!empresa || !file) return;
     createMut.mutate(
-      { client_id: clientId, pdf_password: pdfPassword || undefined, file },
+      { client_id: empresa, pdf_password: pdfPassword || undefined, file, respostas },
       { onSuccess: (r) => navigate(`/classificacao/revisao/${r.statement.id}`) },
     );
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    enviar();
   }
 
 
@@ -76,7 +82,16 @@ export function ClassificarPage() {
           </div>
         )}
 
-        <ErroImportacao err={createMut.error} />
+        <ErroImportacao
+          err={createMut.error}
+          enviando={createMut.isPending}
+          onReenviar={(r) => enviar(r)}
+          onTrocarEmpresa={(empresa) => {
+            // a dona do extrato: escolhe ela e envia lá (as travas conferem de novo)
+            setClientId(empresa.id);
+            enviar(undefined, empresa.id);
+          }}
+        />
 
         <button type="submit" className="btn-primary w-full" disabled={!canSubmit}>
           {createMut.isPending ? 'Lendo o extrato…' : 'Ler extrato'}

@@ -13,6 +13,7 @@ import {
   createStatementSchema,
   lerPlanilhaSchema,
   listStatementsQuerySchema,
+  reimportStatementSchema,
   updateStatementSchema,
   type CreateStatement,
   type ExcelMapeamento,
@@ -21,7 +22,8 @@ import { callParser, callParserExcel, lerPlanilha, type ParseResult } from './pa
 import { classify, memoryKey, type Rule } from '../rules/match.js';
 import { buildDominioFile, ExportError, type ExportLancamento } from '../dominio/exporter.js';
 import { sugerirClassificacoes } from '../classificacoes/memoria.js';
-import { impressaoDoExtrato, recusarDuplicado } from './impressao.js';
+import { impressaoDoExtrato } from './impressao.js';
+import { conferirTravas, type Conferencia, type PedidoTravas, type QuemEnvia } from './travas.js';
 import type { ComplementoModo } from '../dominio/complemento.js';
 
 const upload = multer({
@@ -31,7 +33,7 @@ const upload = multer({
 
 const BUCKET = 'statements';
 const STMT_COLS =
-  'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, classificacao_alterada_em';
+  'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, classificacao_alterada_em, titular_doc, conta_chave, conferencia';
 const TXN_COLS =
   'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id, classificacao_origem';
 
@@ -131,26 +133,46 @@ function buildTotais(txns: ParseResult['transactions']) {
 /** Lançamentos por insert (o mesmo tamanho de página das leituras). */
 const LOTE_GRAVACAO = 1000;
 
+/** O login do pedido, como as travas registram quem enviou. */
+export function quemEnvia(req: { auth?: { userId: string; email?: string | null } }, papel: QuemEnvia['papel']): QuemEnvia {
+  return { papel, userId: req.auth!.userId, email: req.auth?.email ?? null };
+}
+
 /**
- * Trava de extrato duplicado: os mesmos lançamentos já estão em outro extrato
- * da empresa → apaga o extrato que acabou de ser criado (e o arquivo) e
- * devolve o 409 dizendo onde está o original.
+ * Travas de entrada (travas.ts): extrato repetido, de outra empresa, sem
+ * identificação ou sobreposto → apaga o extrato que acabou de ser criado (e o
+ * arquivo) e devolve o 409 com o que falta resolver. Passou → o que gravar.
  */
-export async function descartarSeDuplicado(
+export async function descartarSeTravado(
   supabase: SupabaseClient,
-  p: { clientId: string; statementId: string; parsed: ParseResult; storagePath: string | null },
-): Promise<void> {
+  p: {
+    ownerId: string;
+    empresa: { id: string; razao_social: string; cnpj: string };
+    statementId: string;
+    parsed: ParseResult;
+    storagePath: string | null;
+    quem: QuemEnvia;
+    pedido: PedidoTravas;
+    origem?: 'extrato' | 'planilha';
+    visiveis?: Set<string> | null;
+  },
+): Promise<Conferencia> {
   try {
-    await recusarDuplicado(supabase, {
-      clientId: p.clientId,
-      impressao: impressaoDoExtrato(p.parsed.transactions),
+    return await conferirTravas(supabase, {
+      ownerId: p.ownerId,
+      empresa: p.empresa,
+      parsed: p.parsed,
       excetoId: p.statementId,
+      quem: p.quem,
+      pedido: p.pedido,
+      origem: p.origem,
+      visiveis: p.visiveis,
     });
   } catch (err) {
     if (err instanceof HttpError && err.status === 409) {
       if (p.storagePath) {
         const { error } = await supabase.storage.from(BUCKET).remove([p.storagePath]);
-        if (error) logger.warn({ error }, 'falha ao apagar o arquivo do extrato duplicado');
+        if (error) logger.warn({ error }, 'falha ao apagar o arquivo do extrato recusado');
       }
       await supabase.from('statements').delete().eq('id', p.statementId);
     }
@@ -177,6 +199,8 @@ export async function gravarLancamentos(
     formato: string;
     storagePath: string | null;
     statusFinal: 'revisao' | 'classificacao';
+    /** como passou pelas travas de entrada (titular, conta, quem confirmou/liberou) */
+    conferencia: Conferencia;
   },
 ) {
   // memória só ajuda a pré-preencher: se a leitura falhar, grava sem ela
@@ -258,6 +282,9 @@ export async function gravarLancamentos(
       totais,
       saldo_final: saldoFinal,
       impressao: impressaoDoExtrato(p.parsed.transactions),
+      titular_doc: p.conferencia.titular_doc,
+      conta_chave: p.conferencia.conta_chave,
+      conferencia: p.conferencia.conferencia,
     })
     .eq('id', p.statementId)
     .select(STMT_COLS)
@@ -290,6 +317,9 @@ async function novaImportacao(
     ler: () => Promise<ParseResult>;
     /** colunas a mais no insert do extrato (ex.: excel_mapeamento) */
     extras?: Record<string, unknown>;
+    quem: QuemEnvia;
+    /** planilha do próprio cliente: não traz CNPJ nem conta (muda só o texto da trava) */
+    origem?: 'extrato' | 'planilha';
   },
 ) {
   const { escritorioId, file, dto, formato } = p;
@@ -297,7 +327,7 @@ async function novaImportacao(
   // cliente existe / é do usuário
   const { data: client, error: cErr } = await supabase
     .from('clients')
-    .select('id, saldo_inicial')
+    .select('id, saldo_inicial, razao_social, cnpj')
     .eq('id', dto.client_id)
     .maybeSingle();
   if (cErr) throw mapPgrstError(cErr, 'validar cliente');
@@ -356,11 +386,15 @@ async function novaImportacao(
     throw parseErr ?? badRequest(msg, { warnings: parsed?.warnings ?? [] });
   }
 
-  await descartarSeDuplicado(supabase, {
-    clientId: dto.client_id,
+  const conferencia = await descartarSeTravado(supabase, {
+    ownerId: escritorioId,
+    empresa: client as { id: string; razao_social: string; cnpj: string },
     statementId,
     parsed,
     storagePath: upErr ? null : path,
+    quem: p.quem,
+    pedido: dto,
+    origem: p.origem,
   });
 
   const { statement, transactions } = await gravarLancamentos(supabase, {
@@ -375,6 +409,7 @@ async function novaImportacao(
     formato,
     storagePath: upErr ? null : path,
     statusFinal: 'revisao',
+    conferencia,
   });
 
   return { statement, transactions, warnings: parsed.warnings };
@@ -405,6 +440,7 @@ statementsRouter.post('/', upload.single('file'), async (req, res, next) => {
       dto,
       formato,
       ler: () => callParser(arquivo(file), { pdfPassword: dto.pdf_password }),
+      quem: quemEnvia(req, 'escritorio'),
     });
     res.status(201).json(out);
   } catch (err) {
@@ -472,6 +508,8 @@ statementsRouter.post('/excel', upload.single('file'), async (req, res, next) =>
       formato,
       ler: () => callParserExcel(arquivo(file), dto.mapeamento),
       extras: { excel_mapeamento: dto.mapeamento },
+      quem: quemEnvia(req, 'escritorio'),
+      origem: 'planilha',
     });
     res.status(201).json(out);
   } catch (err) {
@@ -500,7 +538,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
 
     const { data: client, error: cErr } = await supabase
       .from('clients')
-      .select('id, saldo_inicial')
+      .select('id, saldo_inicial, razao_social, cnpj')
       .eq('id', dto.client_id)
       .maybeSingle();
     if (cErr) throw mapPgrstError(cErr, 'validar cliente');
@@ -553,11 +591,14 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
       return;
     }
 
-    await descartarSeDuplicado(supabase, {
-      clientId: dto.client_id,
+    const conferencia = await descartarSeTravado(supabase, {
+      ownerId: escritorioId,
+      empresa: client as { id: string; razao_social: string; cnpj: string },
       statementId,
       parsed,
       storagePath: upErr ? null : path,
+      quem: quemEnvia(req, 'escritorio'),
+      pedido: dto,
     });
 
     const { statement, transactions } = await gravarLancamentos(supabase, {
@@ -572,6 +613,7 @@ statementsRouter.post('/classificar', upload.single('file'), async (req, res, ne
       formato,
       storagePath: upErr ? null : path,
       statusFinal: 'classificacao',
+      conferencia,
     });
 
     res.status(201).json({ statement, transactions, warnings: parsed.warnings });
@@ -590,6 +632,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
   try {
     const escritorioId = escritorioDe(req);
     if (!req.file) throw badRequest('Arquivo do extrato é obrigatório (campo "file")');
+    const dto = reimportStatementSchema.parse(req.body ?? {});
 
     const formato = detectFormat(req.file.originalname);
     if (!formato) {
@@ -598,7 +641,9 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
 
     const { data: stmt, error: sErr } = await supabase
       .from('statements')
-      .select('id, client_id, hist_code_entrada, hist_code_saida, saldo_inicial, status, excel_mapeamento')
+      .select(
+        'id, client_id, hist_code_entrada, hist_code_saida, saldo_inicial, status, excel_mapeamento, client:clients(id, razao_social, cnpj)',
+      )
       .eq('id', statementId)
       .maybeSingle();
     if (sErr) throw mapPgrstError(sErr, 'buscar importação');
@@ -620,7 +665,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     try {
       parsed = await callParser(
         { buffer: req.file.buffer, originalname: req.file.originalname, mimetype: req.file.mimetype },
-        { pdfPassword: typeof req.body?.pdf_password === 'string' ? req.body.pdf_password : undefined },
+        { pdfPassword: dto.pdf_password },
       );
     } catch (e) {
       parseErr = e;
@@ -634,12 +679,18 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
       return;
     }
 
-    // o arquivo novo é igual a OUTRO extrato da empresa? Recusa sem mexer neste
-    // (nem no arquivo guardado). Igual a ele mesmo pode: é trocar pelo mesmo.
-    await recusarDuplicado(supabase, {
-      clientId: stmt.client_id,
-      impressao: impressaoDoExtrato(parsed.transactions),
+    // travas de entrada (igual a OUTRO extrato, de outra empresa, sobreposto...)
+    // recusam sem mexer neste nem no arquivo guardado. Igual a ele mesmo pode:
+    // é trocar pelo mesmo.
+    const empresa = (stmt as unknown as { client: { id: string; razao_social: string; cnpj: string } | null }).client;
+    if (!empresa) throw notFound('Cliente não encontrado');
+    const conferencia = await conferirTravas(supabase, {
+      ownerId: escritorioId,
+      empresa,
+      parsed,
       excetoId: statementId,
+      quem: quemEnvia(req, 'escritorio'),
+      pedido: dto,
     });
 
     const path = `${escritorioId}/${statementId}/${sanitizeName(req.file.originalname)}`;
@@ -667,6 +718,7 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
       formato,
       storagePath: upErr ? null : path,
       statusFinal,
+      conferencia,
     });
 
     res.json({ statement, transactions, warnings: parsed.warnings });

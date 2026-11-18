@@ -19,7 +19,14 @@ class NormalizedTransaction(BaseModel):
 class ParseResult(BaseModel):
     format: FileFormat
     bank_id: str | None = None
-    account_id: str | None = None
+    account_id: str | None = Field(
+        default=None,
+        description="Nº da conta: ACCTID do OFX ou o escrito no cabeçalho do PDF/CSV (só dígitos)",
+    )
+    titular_doc: str | None = Field(
+        default=None,
+        description="CNPJ/CPF do titular (só dígitos), quando dá pra ter certeza — ver parsers/titular.py",
+    )
     period_start: str | None = Field(
         default=None,
         description="Início do período do extrato: o impresso pelo banco, senão o 1º dia do mês do 1º lançamento",

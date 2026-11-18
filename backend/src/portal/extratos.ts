@@ -20,10 +20,11 @@ import {
 } from '../statements/schema.js';
 import { callParser, type ParseResult } from '../statements/parserClient.js';
 import {
-  descartarSeDuplicado,
+  descartarSeTravado,
   detectFormat,
   gravarLancamentos,
   motivoRecusa,
+  quemEnvia,
   sanitizeName,
   sugestoesDoExtrato,
   tipoPorNome,
@@ -161,12 +162,19 @@ portalExtratosRouter.post('/classificar', upload.single('file'), async (req, res
       throw parseErr ?? badRequest(msg, { warnings: parsed?.warnings ?? [] });
     }
 
-    // o mesmo extrato já enviado (por ele ou pelo escritório) não entra de novo
-    await descartarSeDuplicado(admin, {
-      clientId: empresa.id,
+    // travas de entrada: o mesmo extrato (aqui ou em qualquer empresa), extrato
+    // de outra empresa (Junior subido na Valter), sem identificação ou
+    // sobreposto. O cliente só confirma a empresa — liberar é com o escritório.
+    const visiveis = new Set((await empresasDoLogin(admin, userId)).map((e) => e.id));
+    const conferencia = await descartarSeTravado(admin, {
+      ownerId: empresa.owner_id,
+      empresa,
       statementId,
       parsed,
       storagePath: upErr ? null : path,
+      quem: quemEnvia(req, 'cliente'),
+      pedido: { confirmo_empresa: dto.confirmo_empresa, liberar: [] },
+      visiveis,
     });
 
     const { statement, transactions } = await gravarLancamentos(admin, {
@@ -181,6 +189,7 @@ portalExtratosRouter.post('/classificar', upload.single('file'), async (req, res
       formato,
       storagePath: upErr ? null : path,
       statusFinal: 'classificacao',
+      conferencia,
     });
 
     res.status(201).json({

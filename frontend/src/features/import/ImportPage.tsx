@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
 import { ErroImportacao } from '@/features/statements/ErroImportacao';
 import { useCreateStatement, type ImportResult } from '@/features/statements/api';
+import type { RespostasTravas } from '@/features/statements/travas';
 import { FileDrop } from '@/components/FileDrop';
 import { PuxarClassificacaoForm } from './PuxarClassificacaoForm';
 import { useCabecalhoImportacao } from './useCabecalhoImportacao';
@@ -31,13 +32,18 @@ export function ImportPage() {
     [400, 422].includes(createMut.error.status);
   const canSubmit = cab.completo && file && !createMut.isPending;
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!canSubmit || !file) return;
+  function enviar(respostas?: RespostasTravas) {
+    if (!file) return;
     createMut.mutate(
-      { ...cab.dados, pdf_password: pdfPassword || undefined, file },
+      { ...cab.dados, pdf_password: pdfPassword || undefined, file, respostas },
       { onSuccess: (r) => setResult(r) },
     );
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    enviar();
   }
 
 
@@ -103,7 +109,16 @@ export function ImportPage() {
           )}
 
           {createMut.error && (
-            <ErroImportacao err={createMut.error}>
+            <ErroImportacao
+              err={createMut.error}
+              enviando={createMut.isPending}
+              onReenviar={(r) => enviar(r)}
+              onTrocarEmpresa={(empresa) => {
+                // aqui não reenvia sozinho: conta do banco e históricos mudam com o cliente
+                cab.setClientId(empresa.id);
+                createMut.reset();
+              }}
+            >
               {sugerirExcel && (
                 <p className="mt-1">
                   Planilha de controle do próprio cliente? Use a{' '}
