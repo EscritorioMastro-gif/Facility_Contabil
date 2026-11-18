@@ -75,9 +75,9 @@ ele — ver [Acesso do cliente](#acesso-do-cliente).
    tipo (as vazias e as sugestões; dá pra desfazer). No campo da classificação,
    **Enter** desce pro lançamento de baixo (Shift+Enter sobe). Tirar uma
    categoria da lista exclui onde não está em uso e só desativa onde está.
-3. O cliente confere e **aprova** o mês pelo portal (ver
-   [Aprovação do cliente](#aprovação-do-cliente) abaixo); o escritório vê no
-   Histórico quais meses já foram aprovados.
+3. O cliente confere e **aprova** pelo portal — pode ser em partes, ao longo do
+   mês (ver [Aprovação do cliente](#aprovação-do-cliente) abaixo); o escritório
+   vê no Histórico quais meses já foram aprovados, inteiros ou em parte.
 4. Quando terminar, **puxa pra Importação** — escolhe a conta do banco, os
    códigos de histórico e o lote, e o mesmo registro segue pro fluxo normal de
    Revisão/exportação (sem duplicar o extrato).
@@ -101,18 +101,27 @@ dentro — a barra pra passar pro lado fica sempre à vista.
 
 ### Aprovação do cliente
 
-Migration `0026`. O login de cliente tem um botão só, **Aprovar**, que também
-salva. Com lançamento pendente, ele avisa "Faltam N
-lançamentos para classificar" e pergunta se salva o que já foi classificado ou se
-continua a classificação (sem aprovar). Com tudo classificado, o cliente declara que
-conferiu as classificações (**Conferi e aprovo**) e o sistema salva e aprova. Fica
-registrado o login, o e-mail, a data e a hora, quantos lançamentos, o resumo por
-classificação e uma assinatura (sha256) do estado de cada lançamento —
-`classificacao_aprovacoes`, que só recebe inclusões. Se alguém mudar uma
-classificação depois, o extrato aparece como **alterado após a aprovação** até o
-cliente aprovar de novo. O escritório vê a situação no Histórico e no topo da tela
-de classificação; só o portal aprova (o login do escritório não consegue marcar
-aprovação, nem direto no banco).
+Migrations `0026` e `0028`. O login de cliente tem um botão só, **Salvar e
+aprovar**: salva o que ele classificou e, na janela, ele declara que conferiu as
+classificações **já feitas** (**Conferi, salvar e aprovar**). Dá pra aprovar **em
+partes**: com lançamento pendente, aprova o que está classificado e os pendentes
+ficam pra próxima parte. Sem nada novo desde a última aprovação, o botão fica
+parado ("Parte aprovada ✓" / "Aprovado ✓").
+
+Cada aprovação fica registrada em `classificacao_aprovacoes` (só recebe
+inclusões): login, e-mail, data e hora, **IP** (CF-Connecting-IP), quantos
+lançamentos aprovou, **quantos novos** naquela parte, **quantos ainda faltavam**,
+entradas/saídas, o resumo por classificação e uma assinatura (sha256). Cada
+lançamento guarda a classificação que o cliente aprovou
+(`transactions.aprovado_classificacao_id`): a tela mostra **✓ aprovado** em cada
+um e **mudou após aprovação** quando foi trocado depois.
+
+Situação do extrato (Histórico e topo da tela de classificação): **aprovado**,
+**parcial N/T** (aprovou N de T; faltavam lançamentos), **alterado após
+aprovação** (alguém mudou um lançamento que o cliente **já tinha aprovado** —
+classificar um pendente não conta) ou aguardando. Na tela do extrato, **Aprovações
+do cliente** lista cada parte; o escritório vê o IP, o cliente não. Só o portal
+aprova (o login do escritório não consegue marcar aprovação, nem direto no banco).
 
 ### Travas na entrada do extrato
 
@@ -444,6 +453,12 @@ ar em 2026-11-13; migrations `0025` e `0026`):
 - **Aprovação do cliente** (ver [Aprovação do cliente](#aprovação-do-cliente)):
   o cliente declara que conferiu e aprova o mês; fica registrado quem, quando e
   o que foi aprovado, e mudança depois da aprovação aparece no Histórico.
+
+**Aprovação em partes** (2026-11-18; migration `0028` já aplicada no Supabase
+em 18/11 — **API e tela ainda não publicadas**): botão **Salvar e aprovar** aprova o que já está classificado
+mesmo com pendentes; cada parte fica no histórico com o IP; Histórico mostra
+"parcial N/T"; "alterado" só quando muda um lançamento já aprovado. Ver
+[Aprovação do cliente](#aprovação-do-cliente).
 
 **Travas na entrada do extrato** (2026-11-18; migration `0027` já aplicada no
 Supabase em 18/11 — **API, tela e leitor ainda não publicados**): extrato de outra empresa recusado pelo CNPJ do titular ou pela

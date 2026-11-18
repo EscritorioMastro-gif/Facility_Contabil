@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/format';
 import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
 import { useDeleteStatement, useStatementsPaginados } from '@/features/statements/api';
-import { dataHora, situacaoAprovacao } from './aprovacao';
+import { dataHora, parteAprovada, situacaoAprovacao } from './aprovacao';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
   parsing: { text: 'lendo', cls: 'bg-slate-100 text-slate-600' },
@@ -190,6 +190,16 @@ function SeloAprovacao({ s, ehCliente }: { s: Statement; ehCliente: boolean }) {
         title={`Aprovado por ${s.aprovado_por_email ?? 'cliente'} em ${dataHora(s.aprovado_em!)}`}
       >
         ✓ aprovado {new Date(s.aprovado_em!).toLocaleDateString('pt-BR')}
+      </span>
+    );
+  }
+  if (situacao === 'parcial') {
+    return (
+      <span
+        className="whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800"
+        title={`Aprovação parcial: ${s.aprovado_por_email ?? 'cliente'} aprovou ${parteAprovada(s)} lançamentos em ${dataHora(s.aprovado_em!)}`}
+      >
+        parcial {parteAprovada(s).replace(' de ', '/')} · {new Date(s.aprovado_em!).toLocaleDateString('pt-BR')}
       </span>
     );
   }

@@ -33,9 +33,9 @@ const upload = multer({
 
 const BUCKET = 'statements';
 const STMT_COLS =
-  'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, classificacao_alterada_em, titular_doc, conta_chave, conferencia';
+  'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, aprovado_pendentes, classificacao_alterada_em, titular_doc, conta_chave, conferencia';
 const TXN_COLS =
-  'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id, classificacao_origem';
+  'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id, classificacao_origem, aprovado_classificacao_id';
 
 /** Soma líquida (em centavos) de TODOS os lançamentos — inativados inclusos. */
 function movimentoCents(txns: Array<{ direction: string; valor: string | number }>): number {
@@ -774,6 +774,28 @@ statementsRouter.get('/:id', async (req, res, next) => {
     );
 
     res.json({ statement: stmt, transactions: txns });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --------------------------------------------------------------------------- #
+// GET /:id/aprovacoes  — histórico de aprovações do cliente (migration 0026/0028):
+// cada parte que o cliente aprovou, com quem, quando, IP, quantos lançamentos,
+// quantos novos e quantos ainda faltavam. Mais recente primeiro.
+// --------------------------------------------------------------------------- #
+export const APROVACAO_COLS = 'id, email, aprovado_em, qtd, pendentes, novos, entradas, saidas';
+
+statementsRouter.get('/:id/aprovacoes', async (req, res, next) => {
+  try {
+    const { data, error } = await db(req)
+      .from('classificacao_aprovacoes')
+      .select(`${APROVACAO_COLS}, ip`)
+      .eq('statement_id', req.params.id)
+      .order('aprovado_em', { ascending: false })
+      .limit(200);
+    if (error) throw mapPgrstError(error, 'buscar as aprovações');
+    res.json({ aprovacoes: data ?? [] });
   } catch (err) {
     next(err);
   }

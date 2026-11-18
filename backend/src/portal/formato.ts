@@ -6,10 +6,10 @@
 import type { Empresa } from './acesso.js';
 
 export const STMT_COLS_PORTAL =
-  'id, client_id, arquivo_nome, formato, period_start, period_end, status, origem_modulo, totais, erro_msg, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, classificacao_alterada_em';
+  'id, client_id, arquivo_nome, formato, period_start, period_end, status, origem_modulo, totais, erro_msg, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, aprovado_pendentes, classificacao_alterada_em';
 
 export const TXN_COLS_PORTAL =
-  'id, ordem, data, descricao_raw, valor, direction, ignorado, classificacao_id, classificacao_origem';
+  'id, ordem, data, descricao_raw, valor, direction, ignorado, classificacao_id, classificacao_origem, aprovado_classificacao_id';
 
 type Linha = Record<string, unknown>;
 type ClienteEmbed = { razao_social?: unknown; cnpj?: unknown } | null | undefined;
@@ -38,6 +38,7 @@ export function paraExtrato(s: Linha, cliente?: ClienteEmbed) {
     aprovado_em: s.aprovado_em ?? null,
     aprovado_por_email: s.aprovado_por_email ?? null,
     aprovado_qtd: s.aprovado_qtd ?? null,
+    aprovado_pendentes: s.aprovado_pendentes ?? null,
     classificacao_alterada_em: s.classificacao_alterada_em ?? null,
     // fluxo contábil — fora do portal
     storage_path: null,
@@ -66,6 +67,7 @@ export function paraLancamento(t: Linha) {
     ignorado: t.ignorado,
     classificacao_id: t.classificacao_id ?? null,
     classificacao_origem: t.classificacao_origem ?? null,
+    aprovado_classificacao_id: t.aprovado_classificacao_id ?? null,
     // fluxo contábil — fora do portal
     conta_contabil: null,
     hist_code: null,
@@ -73,6 +75,20 @@ export function paraLancamento(t: Linha) {
     cod_complemento_hist: '0',
     regra_id: null,
     origem_preenchimento: 'vazio',
+  };
+}
+
+/** Uma aprovação do histórico, pro próprio cliente — sem o IP (que fica só pro escritório). */
+export function paraAprovacao(a: Linha) {
+  return {
+    id: a.id,
+    email: a.email,
+    aprovado_em: a.aprovado_em,
+    qtd: a.qtd,
+    pendentes: a.pendentes ?? 0,
+    novos: a.novos ?? null,
+    entradas: a.entradas,
+    saidas: a.saidas,
   };
 }
 

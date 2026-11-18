@@ -96,7 +96,9 @@ export type Statement = {
   aprovado_em?: string | null;
   aprovado_por_email?: string | null;
   aprovado_qtd?: number | null;
-  /** última mudança de classificação; depois da aprovação = aprovação não vale mais */
+  /** lançamentos ainda sem classificação na última aprovação (> 0 = parcial) — migration 0028 */
+  aprovado_pendentes?: number | null;
+  /** última mudança num lançamento já aprovado; depois da aprovação = aprovação não vale mais */
   classificacao_alterada_em?: string | null;
   client?: Pick<Client, 'id' | 'razao_social' | 'cnpj' | 'dominio_code'> & { conta_width?: number };
 };
@@ -118,6 +120,8 @@ export type Transaction = {
   classificacao_id: string | null;
   /** classificação posta pela memória: 'memoria' = sempre foi essa; 'conferir' = sugestão (já teve outras) */
   classificacao_origem?: 'memoria' | 'conferir' | null;
+  /** classificação que o cliente aprovou (null = ainda não aprovado) — migration 0028 */
+  aprovado_classificacao_id?: string | null;
 };
 
 export type Classificacao = {

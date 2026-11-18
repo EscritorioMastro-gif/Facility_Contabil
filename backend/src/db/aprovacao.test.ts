@@ -106,8 +106,8 @@ describe('migration 0026 — aprovação das classificações pelo cliente', () 
     ]);
   });
 
-  it('não aprova com lançamento sem classificação', async () => {
-    await expect(aprovar(S_PEND)).rejects.toThrow(/1 lançamento\(s\) sem classificação/);
+  it('sem nenhum lançamento classificado não aprova (em partes: migration 0028)', async () => {
+    await expect(aprovar(S_PEND)).rejects.toThrow(/pelo menos um lançamento/);
     expect((await extrato(S_PEND)).aprovado_em).toBeNull();
   });
 

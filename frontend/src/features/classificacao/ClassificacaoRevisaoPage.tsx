@@ -13,8 +13,8 @@ import { buscarSugestoes, useAprovarClassificacao, useClassificacoes, useSaveCla
 import { useClassificacaoDraft, type OrigemMemoria } from './useClassificacaoDraft';
 import { ClassificacaoSelect } from './ClassificacaoSelect';
 import { AdicionarDaListaGeral } from './AdicionarDaListaGeral';
-import { AvisoAprovacao, ModalAprovacao } from './AprovacaoCliente';
-import { situacaoAprovacao } from './aprovacao';
+import { AvisoAprovacao, HistoricoAprovacoes, ModalAprovacao } from './AprovacaoCliente';
+import { plural, situacaoAprovacao } from './aprovacao';
 
 type Filter = 'todas' | 'entrada' | 'saida' | 'pendentes' | 'sugestoes';
 
@@ -64,17 +64,22 @@ export function ClassificacaoRevisaoPage() {
   const stats = useMemo(() => {
     let classificados = 0;
     let pend = 0;
+    // classificados que ainda não foram aprovados assim pelo cliente (novos ou mudados)
+    let novos = 0;
     const sugestoes: string[] = [];
     let daMemoria = 0;
     const ativos = transactions.filter((t) => !t.ignorado);
     for (const t of ativos) {
-      if (get(t.id)) classificados++;
-      else pend++;
+      const v = get(t.id);
+      if (v) {
+        classificados++;
+        if (v !== (t.aprovado_classificacao_id ?? null)) novos++;
+      } else pend++;
       const o = origemDe(t);
       if (o === 'conferir') sugestoes.push(t.id);
       else if (o === 'memoria') daMemoria++;
     }
-    return { ativos: ativos.length, classificados, pend, sugestoes, daMemoria };
+    return { ativos: ativos.length, classificados, pend, novos, sugestoes, daMemoria };
   }, [transactions, get, origemDe]);
 
   // Pendentes/Sugestões pelo que está SALVO (ou acabou de ser sugerido): a linha
@@ -132,17 +137,17 @@ export function ClassificacaoRevisaoPage() {
   // login de cliente: depois que o escritório puxou o extrato, só consulta
   const somenteLeitura = ehCliente && jaPuxado;
 
-  // Login de cliente: um botão só, "Aprovar", que também salva. Com lançamento
-  // pendente, a janela pergunta se salva o que já classificou ou continua; com
-  // tudo classificado, ele declara que conferiu e aprova (salvando antes).
+  // Login de cliente: um botão só, "Salvar e aprovar". Salva o que ele classificou
+  // e registra que conferiu e aprova o que JÁ está classificado — mesmo com
+  // pendentes (aprovação em partes, migration 0028). Sem nada novo desde a
+  // última aprovação, o botão fica parado.
   const situacao = situacaoAprovacao(st);
-  const aprovadoSemMudanca = situacao === 'aprovado' && !isDirty;
+  const temNovidade = isDirty || stats.novos > 0 || situacao === 'alterado';
   const podeAbrirAprovacao =
     ehCliente &&
     ['classificacao', 'revisao', 'gerado'].includes(st.status) &&
-    stats.ativos > 0 &&
-    !aprovadoSemMudanca;
-  const podeAprovar = podeAbrirAprovacao && stats.pend === 0;
+    stats.classificados > 0 &&
+    temNovidade;
   const ocupado = save.isPending || aprovar.isPending;
 
   function onSave() {
@@ -156,11 +161,6 @@ export function ClassificacaoRevisaoPage() {
     aprovar.reset();
     save.reset();
     setAprovando(true);
-  }
-
-  /** "Salvar" na janela de pendentes: grava o que já foi classificado, sem aprovar. */
-  function salvarSemAprovar() {
-    save.mutate(changes, { onSuccess: () => setAprovando(false) });
   }
 
   async function confirmarAprovacao() {
@@ -188,14 +188,26 @@ export function ClassificacaoRevisaoPage() {
       onClick={abrirAprovacao}
       disabled={!podeAbrirAprovacao || ocupado}
       title={
-        aprovadoSemMudanca
-          ? 'Você já aprovou este mês'
-          : stats.pend > 0
-            ? `Salvar o que já classificou — para aprovar, ${stats.pend === 1 ? 'falta 1 lançamento' : `faltam ${stats.pend} lançamentos`}`
-            : 'Salvar e declarar que conferiu as classificações'
+        stats.classificados === 0
+          ? 'Classifique pelo menos um lançamento para aprovar'
+          : !temNovidade
+            ? situacao === 'aprovado'
+              ? 'Você já aprovou este mês'
+              : 'Você já aprovou o que está classificado — classifique mais lançamentos para aprovar a próxima parte'
+            : stats.pend > 0
+              ? `Salvar e aprovar o que já classificou (${plural(stats.pend, 'lançamento fica', 'lançamentos ficam')} para a próxima parte)`
+              : 'Salvar e declarar que conferiu as classificações'
       }
     >
-      {ocupado ? 'Salvando…' : aprovadoSemMudanca ? 'Aprovado ✓' : isDirty ? `Aprovar (${changes.length})` : 'Aprovar'}
+      {ocupado
+        ? 'Salvando…'
+        : !temNovidade && situacao === 'aprovado'
+          ? 'Aprovado ✓'
+          : !temNovidade && situacao === 'parcial'
+            ? 'Parte aprovada ✓'
+            : isDirty
+              ? `Salvar e aprovar (${changes.length})`
+              : 'Salvar e aprovar'}
     </button>
   );
 
@@ -275,7 +287,7 @@ export function ClassificacaoRevisaoPage() {
           >
             Voltar
           </button>
-          {/* cliente salva pelo "Aprovar" */}
+          {/* cliente salva pelo "Salvar e aprovar" */}
           {!ehCliente && (
             <button className="btn-primary" onClick={onSave} disabled={!isDirty || save.isPending}>
               {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
@@ -285,7 +297,8 @@ export function ClassificacaoRevisaoPage() {
         </div>
       </div>
 
-      <AvisoAprovacao st={st} ehCliente={ehCliente} podeAprovar={podeAprovar && !isDirty} />
+      <AvisoAprovacao st={st} ehCliente={ehCliente} />
+      <HistoricoAprovacoes st={st} ehCliente={ehCliente} />
 
       {jaPuxado && (
         <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
@@ -500,6 +513,7 @@ export function ClassificacaoRevisaoPage() {
                         origem={origem}
                         onAceitar={somenteLeitura ? undefined : () => aceitar([txn.id])}
                       />
+                      <SeloAprovado aprovado={txn.aprovado_classificacao_id ?? null} atual={get(txn.id)} />
                     </div>
                   </td>
                 </tr>
@@ -525,12 +539,12 @@ export function ClassificacaoRevisaoPage() {
         <span className="text-slate-500">
           {isDirty
             ? ehCliente
-              ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Aprovar" para salvar.`
+              ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Salvar e aprovar" para salvar.`
               : 'Salve as alterações antes de ir pra Importação.'
             : stats.pend > 0
               ? `${stats.pend} lançamento(s) ainda sem classificação.`
-              : ehCliente && situacao !== 'aprovado'
-                ? `Tudo classificado (${stats.classificados}/${stats.ativos}) — falta aprovar o mês.`
+              : ehCliente && temNovidade
+                ? `Tudo classificado (${stats.classificados}/${stats.ativos}) — falta aprovar.`
                 : `Tudo classificado (${stats.classificados}/${stats.ativos}).`}
         </span>
         <div className="flex gap-2">
@@ -563,13 +577,12 @@ export function ClassificacaoRevisaoPage() {
       <ModalAprovacao
         open={aprovando}
         st={st}
-        qtd={stats.ativos}
+        qtd={stats.classificados}
+        novos={stats.novos}
         pendentes={stats.pend}
         email={user?.email ?? null}
-        temAlteracoes={isDirty}
         busy={ocupado}
         erro={erroAprovacao}
-        onSalvar={salvarSemAprovar}
         onAprovar={confirmarAprovacao}
         onCancelar={() => setAprovando(false)}
       />
@@ -620,6 +633,29 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
     );
   }
   return null;
+}
+
+/** O cliente já aprovou este lançamento? ✓ = aprovado como está; âmbar = mudou depois da aprovação. */
+function SeloAprovado({ aprovado, atual }: { aprovado: string | null; atual: string | null }) {
+  if (!aprovado) return null;
+  if (aprovado === atual) {
+    return (
+      <span
+        className="whitespace-nowrap rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700"
+        title="O cliente aprovou esta classificação"
+      >
+        ✓ aprovado
+      </span>
+    );
+  }
+  return (
+    <span
+      className="whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+      title="A classificação mudou depois que o cliente aprovou — precisa de nova aprovação"
+    >
+      mudou após aprovação
+    </span>
+  );
 }
 
 function Stat({ label, value, tone }: { label: string; value: string; tone?: 'green' | 'amber' }) {

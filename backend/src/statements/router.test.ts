@@ -798,6 +798,19 @@ describe('GET /statements/:id', () => {
   });
 });
 
+describe('GET /statements/:id/aprovacoes', () => {
+  it('histórico das aprovações do cliente, com o IP, mais recente primeiro', async () => {
+    const parte = { id: 'ap-1', email: 'c@empresa.com', qtd: 40, pendentes: 51, novos: 40, ip: '200.150.10.20' };
+    const { app, ops } = appWith(handlerFor({ 'classificacao_aprovacoes.select': () => [parte] }));
+    const res = await request(app).get('/statements/s1/aprovacoes');
+    expect(res.status).toBe(200);
+    expect(res.body.aprovacoes).toEqual([parte]);
+    const op = ops.find((o) => o.table === 'classificacao_aprovacoes')!;
+    expect(op.filters).toContainEqual(['statement_id', 's1']);
+    expect(op.orderCalls).toEqual([{ col: 'aprovado_em', foreignTable: undefined, ascending: false }]);
+  });
+});
+
 describe('POST /statements/:id/export', () => {
   const stmtRow = {
     id: 's1',

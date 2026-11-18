@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import type { Classificacao, ClassificacaoGeral, Direction, Transaction } from '@/lib/types';
 import type { StatementDetail } from '@/features/statements/api';
 import { anexarRespostas, type RespostasTravas } from '@/features/statements/travas';
+import type { Aprovacao } from './aprovacao';
 
 export type ClassificarResult = StatementDetail & { warnings: string[] };
 
@@ -155,7 +156,20 @@ export function useCreateStatementClassificar() {
   });
 }
 
-/** Login de cliente: declara que conferiu as classificações do extrato e aprova (fica registrado quem e quando). */
+/** Histórico das aprovações do cliente no extrato (cada parte aprovada). Chave sob 'statements': aprovar recarrega. */
+export function useAprovacoes(statementId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['statements', 'aprovacoes', statementId],
+    queryFn: () => api<{ aprovacoes: Aprovacao[] }>(`/api/statements/${statementId}/aprovacoes`),
+    select: (d) => d.aprovacoes,
+    enabled,
+  });
+}
+
+/**
+ * Login de cliente: "Salvar e aprovar" — declara que conferiu as classificações
+ * já feitas e aprova (pode ser parte do mês). Fica registrado quem, quando e o IP.
+ */
 export function useAprovarClassificacao(statementId: string) {
   const qc = useQueryClient();
   return useMutation({

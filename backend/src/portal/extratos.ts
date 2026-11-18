@@ -13,6 +13,7 @@ import { adminDe } from '../lib/admin.js';
 import { badRequest, forbidden, notFound } from '../lib/httpError.js';
 import { emLotes, lerTodas, mapPgrstError } from '../lib/pgrst.js';
 import { logger } from '../lib/logger.js';
+import { ipDoCliente } from '../lib/ip.js';
 import {
   bulkUpdateClassificacaoSchema,
   classificarStatementSchema,
@@ -20,6 +21,7 @@ import {
 } from '../statements/schema.js';
 import { callParser, type ParseResult } from '../statements/parserClient.js';
 import {
+  APROVACAO_COLS,
   descartarSeTravado,
   detectFormat,
   gravarLancamentos,
@@ -30,7 +32,7 @@ import {
   tipoPorNome,
 } from '../statements/router.js';
 import { empresasDoLogin, exigirEmpresa } from './acesso.js';
-import { paraExtrato, paraLancamento, STMT_COLS_PORTAL, TXN_COLS_PORTAL } from './formato.js';
+import { paraAprovacao, paraExtrato, paraLancamento, STMT_COLS_PORTAL, TXN_COLS_PORTAL } from './formato.js';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -265,11 +267,13 @@ portalExtratosRouter.patch('/:id/classificacao', async (req, res, next) => {
 });
 
 // --------------------------------------------------------------------------- #
-// POST /:id/aprovacao  — o cliente declara que conferiu as classificações do
-// extrato e aprova (migration 0026). Fica registrado o login, o e-mail, a data
-// e a hora; se alguém mexer numa classificação depois, a aprovação deixa de
-// valer até ele aprovar de novo. Vale também depois que o escritório puxou o
-// extrato pra Importação (aprovar não muda nenhum lançamento).
+// POST /:id/aprovacao  — "Salvar e aprovar": o cliente declara que conferiu as
+// classificações JÁ FEITAS e aprova (migrations 0026/0028) — pode ser só uma
+// parte do mês; os pendentes ficam pra próxima aprovação. Fica registrado o
+// login, o e-mail, a data, a hora e o IP; se alguém mexer num lançamento que
+// ele já aprovou, a aprovação deixa de valer até ele aprovar de novo. Vale
+// também depois que o escritório puxou o extrato pra Importação (aprovar não
+// muda nenhuma classificação).
 // --------------------------------------------------------------------------- #
 portalExtratosRouter.post('/:id/aprovacao', async (req, res, next) => {
   try {
@@ -290,6 +294,7 @@ portalExtratosRouter.post('/:id/aprovacao', async (req, res, next) => {
       p_statement: req.params.id,
       p_user: userId,
       p_email: email ?? '',
+      p_ip: ipDoPedido(req),
     });
     if (error) {
       // 22023 = regra da aprovação (lançamento sem classificação etc.): a mensagem já é pro cliente
@@ -299,6 +304,33 @@ portalExtratosRouter.post('/:id/aprovacao', async (req, res, next) => {
 
     const atualizado = await extratoDoLogin(admin, userId, req.params.id);
     res.json({ statement: paraExtrato(atualizado) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** IP de quem aprovou (CF-Connecting-IP no Render); sem IP conhecido, fica em branco. */
+function ipDoPedido(req: Parameters<typeof ipDoCliente>[0]): string | null {
+  const ip = ipDoCliente(req);
+  return ip === 'desconhecido' ? null : ip;
+}
+
+// --------------------------------------------------------------------------- #
+// GET /:id/aprovacoes  — as aprovações que o próprio cliente fez neste extrato
+// (o IP fica só pro escritório)
+// --------------------------------------------------------------------------- #
+portalExtratosRouter.get('/:id/aprovacoes', async (req, res, next) => {
+  try {
+    const admin = adminDe(req);
+    await extratoDoLogin(admin, req.auth!.userId, req.params.id);
+    const { data, error } = await admin
+      .from('classificacao_aprovacoes')
+      .select(APROVACAO_COLS)
+      .eq('statement_id', req.params.id)
+      .order('aprovado_em', { ascending: false })
+      .limit(200);
+    if (error) throw mapPgrstError(error, 'buscar as aprovações');
+    res.json({ aprovacoes: (data ?? []).map((a) => paraAprovacao(a as Record<string, unknown>)) });
   } catch (err) {
     next(err);
   }

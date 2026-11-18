@@ -98,6 +98,19 @@ let IMPRESSAO_REPETIDA = '';
 
 const filtro = (op: FakeOp, col: string) => op.filters.find(([c]) => c === col)?.[1];
 
+/** Uma parte aprovada pelo cliente (o banco guarda o IP; o portal não devolve). */
+const APROVACAO_PARCIAL = {
+  id: 'ap-1',
+  email: 'cliente@empresa.com',
+  aprovado_em: '2026-11-18T14:00:00Z',
+  qtd: 40,
+  pendentes: 51,
+  novos: 40,
+  entradas: '1000.00',
+  saidas: '500.00',
+  ip: '200.150.10.20',
+};
+
 /** Banco falso com a regra que importa: acessos, empresas ativas, extratos e classificações. */
 function banco(op: FakeOp) {
   const ativo = filtro(op, 'ativo');
@@ -151,6 +164,11 @@ function banco(op: FakeOp) {
       if (id) return { data: todas.find((c) => c.id === id) ?? null, error: null };
       return { data: todas.filter((c) => c.client_id === filtro(op, 'client_id')), error: null };
     }
+    case 'classificacao_aprovacoes':
+      return {
+        data: filtro(op, 'statement_id') === ST_A ? [APROVACAO_PARCIAL] : [],
+        error: null,
+      };
     case 'mapping_rules':
       return { data: [], error: null };
     default:
@@ -352,12 +370,15 @@ describe('portal do cliente — extratos', () => {
 });
 
 describe('portal do cliente — aprovação das classificações', () => {
-  it('aprova: registra pela função do portal com o login e o e-mail dele', async () => {
+  it('aprova: registra pela função do portal com o login, o e-mail e o IP dele', async () => {
     const { app, rpcOps } = appCliente();
-    const res = await request(app).post(`/statements/${ST_A}/aprovacao`);
+    const res = await request(app).post(`/statements/${ST_A}/aprovacao`).set('CF-Connecting-IP', '200.150.10.20');
     expect(res.status).toBe(200);
     expect(rpcOps).toEqual([
-      { fn: 'aprovar_classificacao', args: { p_statement: ST_A, p_user: LOGIN, p_email: 'cliente@empresa.com' } },
+      {
+        fn: 'aprovar_classificacao',
+        args: { p_statement: ST_A, p_user: LOGIN, p_email: 'cliente@empresa.com', p_ip: '200.150.10.20' },
+      },
     ]);
     expect(res.body.statement).toMatchObject({ id: ST_A, aprovado_em: null, banco_conta_contabil: null });
   });
@@ -368,14 +389,43 @@ describe('portal do cliente — aprovação das classificações', () => {
     expect(rpcOps[0]?.fn).toBe('aprovar_classificacao');
   });
 
-  it('com lançamento sem classificação: 400 com a mensagem do banco', async () => {
+  it('sem IP da Cloudflare (dev), vai o IP da conexão', async () => {
+    const { app, rpcOps } = appCliente();
+    await request(app).post(`/statements/${ST_A}/aprovacao`);
+    expect((rpcOps[0]?.args as { p_ip: string | null }).p_ip).toMatch(/127\.0\.0\.1|::1/);
+  });
+
+  it('regra da aprovação (nada classificado, nada novo): 400 com a mensagem do banco', async () => {
     const { app } = appCliente(() => ({
       data: null,
-      error: { code: '22023', message: 'Ainda há 2 lançamento(s) sem classificação — classifique todos antes de aprovar.' },
+      error: { code: '22023', message: 'Classifique pelo menos um lançamento antes de aprovar.' },
     }));
     const res = await request(app).post(`/statements/${ST_A}/aprovacao`);
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/2 lançamento\(s\) sem classificação/);
+    expect(res.body.error).toMatch(/pelo menos um lançamento/);
+  });
+
+  it('histórico das aprovações do extrato dele, sem o IP', async () => {
+    const { app } = appCliente();
+    const res = await request(app).get(`/statements/${ST_A}/aprovacoes`);
+    expect(res.status).toBe(200);
+    expect(res.body.aprovacoes).toEqual([
+      {
+        id: 'ap-1',
+        email: 'cliente@empresa.com',
+        aprovado_em: '2026-11-18T14:00:00Z',
+        qtd: 40,
+        pendentes: 51,
+        novos: 40,
+        entradas: '1000.00',
+        saidas: '500.00',
+      },
+    ]);
+  });
+
+  it('histórico de extrato de outra empresa: 404', async () => {
+    const { app } = appCliente();
+    expect((await request(app).get(`/statements/${ST_X}/aprovacoes`)).status).toBe(404);
   });
 
   it('extrato de outra empresa ou que nasceu na Importação: 404, sem aprovar nada', async () => {
