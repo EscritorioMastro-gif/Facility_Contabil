@@ -48,6 +48,10 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.13.5
+      # marca do Blueprint (o código não lê): força a sincronização a registrar
+      # o serviço na aba Resources do Blueprint depois da troca de nomes (2026-11-23)
+      - key: BLUEPRINT
+        value: facility-contabil
       - fromGroup: facility-contabil-segredo
 
   # ------------------------------------------------------------------------
@@ -87,6 +91,10 @@ services:
       # Em serviço já criado, o Render NÃO pede: cadastrar no painel (Environment).
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # marca do Blueprint (o código não lê): força a sincronização a registrar
+      # o serviço na aba Resources do Blueprint depois da troca de nomes (2026-11-23)
+      - key: BLUEPRINT
+        value: facility-contabil
       - fromGroup: facility-contabil-segredo
 
   # ------------------------------------------------------------------------
@@ -135,3 +143,7 @@ services:
       # só pra acordar o leitor que dormiu (frontend/src/lib/acordarLeitor.ts)
       - key: VITE_PARSER_URL
         value: https://facility-contabil-mastro-parser.onrender.com
+      # marca do Blueprint (o código não lê): força a sincronização a registrar
+      # o serviço na aba Resources do Blueprint depois da troca de nomes (2026-11-23)
+      - key: BLUEPRINT
+        value: facility-contabil
