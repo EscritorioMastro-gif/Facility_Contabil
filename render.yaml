@@ -4,9 +4,16 @@
 #
 # Primeiro deploy: Render → New → Blueprint → este repositório. O Render só
 # pede os valores do Supabase (sync: false); o segredo API↔leitor é gerado.
-# Os serviços se acham pelos endereços públicos https://<nome>.onrender.com —
-# se o Render der outro endereço a algum serviço, ajuste PARSER_URL,
-# FRONTEND_ORIGIN, VITE_API_URL e VITE_PARSER_URL (e o connect-src da CSP) abaixo.
+# Os serviços se acham pelos endereços públicos https://facility-contabil-mastro*.onrender.com
+# (o endereço nasce do nome na criação e não muda depois) — se o Render der
+# outro endereço a algum serviço, ajuste PARSER_URL, FRONTEND_ORIGIN,
+# VITE_API_URL e VITE_PARSER_URL (e o connect-src da CSP) abaixo.
+#
+# NOMES: o Blueprint liga cada serviço do painel ao daqui PELO NOME. Em
+# 2026-11-23 os serviços foram renomeados no painel (sem "mastro") e os nomes
+# abaixo foram acertados junto; os endereços continuaram os antigos. Renomear
+# um serviço no painel sem mudar aqui (ou o contrário) faz a sincronização
+# CRIAR um serviço novo em vez de atualizar o que está no ar.
 #
 # Plano: API e leitor no `starter` (0,5 CPU / 512 MB, pago por hora, ~US$ 7/mês
 # cada) desde 2026-11-17 — não dormem. A tela é site estático (grátis).
@@ -29,7 +36,7 @@ services:
   # Leitor de extratos (Python/FastAPI) — parser/
   # ------------------------------------------------------------------------
   - type: web
-    name: facility-contabil-mastro-parser
+    name: facility-contabil-parser
     runtime: python
     plan: starter
     region: virginia
@@ -47,7 +54,7 @@ services:
   # API (Node/Express) — backend/ (workspace npm, instalado pela raiz)
   # ------------------------------------------------------------------------
   - type: web
-    name: facility-contabil-mastro-api
+    name: facility-contabil-api
     runtime: node
     plan: starter
     region: virginia
@@ -86,7 +93,7 @@ services:
   # Tela (React/Vite) — site estático, frontend/
   # ------------------------------------------------------------------------
   - type: web
-    name: facility-contabil-mastro
+    name: facility-contabil
     runtime: static
     buildCommand: npm ci --include=dev && npm run build -w frontend
     staticPublishPath: frontend/dist

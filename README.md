@@ -503,11 +503,20 @@ extrato** (o mesmo título da tela). Ver [Interface e atalhos](#interface-e-atal
 `render.yaml` (Blueprint do Render) descreve os 3 serviços no ar — o banco
 continua sendo o Supabase:
 
-| Serviço | Tipo | Endereço |
-|---|---|---|
-| tela | site estático (`frontend/dist`) | https://facility-contabil-mastro.onrender.com |
-| API | web, Node | https://facility-contabil-mastro-api.onrender.com |
-| leitor de extratos | web, Python | https://facility-contabil-mastro-parser.onrender.com |
+| Serviço | Nome no Render | Tipo | Endereço |
+|---|---|---|---|
+| tela | `facility-contabil` | site estático (`frontend/dist`) | https://facility-contabil-mastro.onrender.com |
+| API | `facility-contabil-api` | web, Node | https://facility-contabil-mastro-api.onrender.com |
+| leitor de extratos | `facility-contabil-parser` | web, Python | https://facility-contabil-mastro-parser.onrender.com |
+
+**Nome × endereço:** os serviços foram renomeados no painel em 2026-11-23 (sem
+"mastro"), mas o endereço `*.onrender.com` nasce do nome na criação e **não
+muda** — por isso os endereços continuam com "mastro". O Blueprint liga cada
+serviço do painel ao do `render.yaml` **pelo nome**: renomear no painel sem
+mudar o `render.yaml` (ou o contrário) faz a sincronização **criar um serviço
+novo** em vez de atualizar o que está no ar. E serviço criado pelo Blueprint que
+for apagado à mão volta na próxima sincronização — pra tirar de vez, tire do
+`render.yaml` primeiro.
 
 1. Render → **New → Blueprint** → este repositório (branch `main`).
 2. O Render pede só os valores do Supabase: `SUPABASE_URL` / `SUPABASE_ANON_KEY`
@@ -520,23 +529,25 @@ continua sendo o Supabase:
    to sign up*) — com o sistema na internet, só entra quem for criado no painel
    (ou convidado pelo escritório — ver [Acesso do cliente](#acesso-do-cliente)).
 
-**Publicar uma versão nova** (o `git push` sozinho **não** publica — o
-auto-deploy do Render não dispara neste repositório):
+**Publicar uma versão nova:**
 
 1. Mudou o banco? Rodar `npm run migrate -w backend` **antes** (na pasta do
    projeto): a API nova costuma depender das tabelas/funções novas.
-2. `git push` no `main`.
-3. Mudou o `render.yaml` (variáveis, cabeçalhos)? Esperar a sincronização do
-   Blueprint antes do passo 4 — as `VITE_*` entram na tela na hora do build.
-4. Render → cada serviço que mudou (API, tela, leitor) → **Manual Deploy** →
-   *Deploy latest commit*.
+2. `git push` no `main` — o Render publica sozinho (`autoDeployTrigger:
+   commit`; em 2026-11-23 a tela e a API subiram ~2 min depois do push).
+3. Mudou o `render.yaml` (variáveis, cabeçalhos, plano)? O Blueprint precisa
+   sincronizar (automático se o *Auto Sync* dele estiver ligado; senão,
+   **Manual Sync** na página do Blueprint) — as `VITE_*` entram na tela na
+   hora do build.
+4. Conferir no painel se cada serviço que mudou ficou *Deployed*; se algum não
+   atualizou, **Manual Deploy** → *Deploy latest commit*.
 
-Plano **free**: cada serviço dorme após 15 min sem uso. A tela acorda o leitor
-sozinha ao entrar e ao escolher um arquivo (`frontend/src/lib/acordarLeitor.ts`)
-e a API espera ele subir até 1 min antes de dar erro — chamada de dentro do
-Render não acorda serviço dormindo. Pra uso diário, troque `plan: free` por
-`plan: starter` na API e no leitor (extrato muito grande em PDF também lê bem
-mais rápido fora da CPU fracionada do free). Se o Render der outro endereço a
+Plano: API e leitor no **starter** pelo `render.yaml` (não dormem; extrato
+grande em PDF lê bem mais rápido que na CPU fracionada do free). No **free**
+cada serviço dorme após 15 min sem uso — a tela acorda o leitor sozinha ao
+entrar e ao escolher um arquivo (`frontend/src/lib/acordarLeitor.ts`) e a API
+espera ele subir até 1 min antes de dar erro (chamada de dentro do Render não
+acorda serviço dormindo). Se o Render der outro endereço a
 algum serviço, ajuste `PARSER_URL`, `FRONTEND_ORIGIN`, `VITE_API_URL` e
 `VITE_PARSER_URL` no `render.yaml`.
 
