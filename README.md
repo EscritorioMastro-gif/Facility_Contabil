@@ -20,6 +20,24 @@ O **cliente do escritório** também pode ter login próprio (opcional, liberado
 cadastro dele): entra só no módulo **Classificação** das empresas liberadas pra
 ele — ver [Acesso do cliente](#acesso-do-cliente).
 
+## Interface e atalhos
+
+Visual repaginado em 2026-11 com a mesma paleta (branco + verde-petróleo):
+fontes **Plus Jakarta Sans** (texto), **Sora** (títulos e números) e
+**JetBrains Mono** (contas, lotes e códigos). As peças reaproveitadas ficam em
+`frontend/src/components/ui.tsx` (cabeçalho de página, filtros, etapas,
+progresso, barra de ações) e os estilos base em `frontend/src/index.css`.
+
+- **Ctrl+K** (ou **/**) em qualquer tela abre a busca: digite o nome da tela
+  (histórico, memória, clientes…) e Enter.
+- **Ctrl+S** salva na Revisão e na Classificação (o cliente salva pelo
+  "Salvar e aprovar").
+- Na Classificação, **Enter** desce pro lançamento de baixo e
+  **Shift+Enter** sobe.
+- Importação, Revisão e Classificação mostram a **etapa** do fluxo no topo; a
+  Revisão e a Classificação têm a **barra de ações presa no rodapé** (salvar,
+  gerar arquivo, aprovar) e o progresso do que já está pronto.
+
 ## Fluxo — Importação
 
 1. **Escolhe o cliente** e **sobe o extrato do mês** (PDF/OFX/CSV/XLS/XLSX) — ou
@@ -466,6 +484,15 @@ conta, mesmo extrato barrado em todas as empresas do escritório, extrato
 sobreposto barrado, confirmação da empresa quando o extrato não diz de quem é e
 liberação registrada pelo escritório. Ver
 [Travas na entrada do extrato](#travas-na-entrada-do-extrato).
+
+**Repaginação visual** (2026-11-23; só frontend, sem migration — **ainda não
+publicada**): mesma paleta, fontes novas, barra lateral e barra superior novas
+(caminho da tela, busca **Ctrl+K** e status dos serviços), formulários em
+seções com ajuda ao lado, etapas do fluxo no topo, progresso e **barra de ações
+fixa** com **Ctrl+S** na Revisão e na Classificação, avisos de confirmação no
+canto da tela, busca na Memória e filtro Todos/Ativos/Inativos nos Clientes. No
+menu da Classificação, "Nova importação" passou a se chamar **Classificar
+extrato** (o mesmo título da tela). Ver [Interface e atalhos](#interface-e-atalhos).
 
 ## Uso no dia a dia
 

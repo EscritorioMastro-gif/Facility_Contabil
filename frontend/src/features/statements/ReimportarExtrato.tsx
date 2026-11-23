@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
+import { IconRecarregar, Spinner } from '@/components/icons';
 import { useReimportStatement } from './api';
 import { ErroImportacao } from './ErroImportacao';
 import type { RespostasTravas } from './travas';
@@ -27,7 +28,7 @@ export function ReimportarExtrato({
   if (excel) {
     return (
       <span
-        className={`cursor-help text-slate-400 ${as === 'button' ? 'btn border border-brand-200 bg-white' : ''}`}
+        className={`cursor-help text-slate-400 ${as === 'button' ? 'btn border-brand-200 bg-white/70' : ''}`}
         title="Importação de planilha Excel: para trocar a planilha, faça uma nova importação Excel."
       >
         reimportar
@@ -75,14 +76,25 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
       />
       <button
         type="button"
-        className={as === 'button' ? 'btn-ghost' : 'text-brand-600 hover:underline'}
+        className={as === 'button' ? 'btn-ghost' : 'link'}
         onClick={() => inputRef.current?.click()}
+        title="Trocar o arquivo deste extrato"
       >
-        reimportar
+        {as === 'button' && <IconRecarregar className="h-4 w-4" />}
+        {as === 'button' ? 'Reimportar' : 'reimportar'}
       </button>
 
-      <Modal open={!!file} onClose={fechar} title="Reimportar extrato">
-        <p className="text-sm text-slate-600">
+      <Modal
+        open={!!file}
+        onClose={fechar}
+        title="Reimportar extrato"
+        icone={
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+            <IconRecarregar className="h-5 w-5" />
+          </span>
+        }
+      >
+        <p className="text-sm leading-relaxed text-slate-600">
           Trocar pelo arquivo <span className="font-medium">"{file?.name}"</span>? Os{' '}
           <span className="font-medium">{qtd}</span> lançamento(s) atuais serão substituídos.
           Suas classificações se perdem — a memória do cliente reaplica o que puder.
@@ -107,16 +119,17 @@ function Reimportar({ statementId, qtd, as }: { statementId: string; qtd: number
           </div>
         )}
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-6 flex justify-end gap-2">
           <button className="btn-ghost" onClick={fechar} disabled={reimport.isPending}>
             Cancelar
           </button>
           <button
-            className="btn bg-red-600 text-white hover:bg-red-700"
+            className="btn-danger"
             onClick={() => confirmar()}
             disabled={reimport.isPending}
           >
-            {reimport.isPending ? 'Lendo…' : 'Reimportar'}
+            {reimport.isPending && <Spinner />}
+          {reimport.isPending ? 'Lendo…' : 'Reimportar'}
           </button>
         </div>
       </Modal>

@@ -1,4 +1,5 @@
 import { ApiError } from '@/lib/api';
+import { IconDownload, Spinner } from '@/components/icons';
 import { useGenerateDominio } from './api';
 
 /** Botão "baixar" pro arquivo Domínio de uma importação já gerada. */
@@ -10,11 +11,12 @@ export function BaixarDominio({ statementId }: { statementId: string }) {
   return (
     <span className="inline-flex items-center gap-1">
       <button
-        className="text-brand-600 hover:underline disabled:opacity-50"
+        className="link"
         disabled={gerar.isPending}
         onClick={() => gerar.mutate()}
         title="Gera e baixa o .txt no Leiaute Domínio"
       >
+        {gerar.isPending ? <Spinner className="h-3.5 w-3.5" /> : <IconDownload className="h-3.5 w-3.5" />}
         {gerar.isPending ? 'gerando…' : 'baixar'}
       </button>
       {err && <span className="text-xs text-red-600">{err}</span>}

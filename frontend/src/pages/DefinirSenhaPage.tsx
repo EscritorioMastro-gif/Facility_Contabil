@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { supabase } from '@/lib/supabase';
+import { IconCheck, IconChave, Spinner } from '@/components/icons';
+import { Carregando } from '@/components/ui';
+import { AuthShell, CampoSenha } from './AuthShell';
 
 const MINIMO = 8;
 
@@ -54,78 +57,111 @@ export function DefinirSenhaPage() {
     setPronto(true);
   }
 
+  const forca = forcaDaSenha(senha);
+  const iguais = confirma.length > 0 && senha === confirma;
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-cream px-4 py-12">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-800 text-sm font-bold text-cream">
-            FC
-          </span>
-          <span className="text-base font-semibold text-slate-800">Facility Contábil</span>
-        </div>
+    <AuthShell>
+      {loading ? (
+        <Carregando />
+      ) : !session ? (
+        <>
+          <p className="eyebrow">Link do e-mail</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-800">Link expirado ou inválido</h1>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">
+            O link do e-mail vale por pouco tempo e só pode ser usado uma vez. Na tela de entrada,
+            use <b>Esqueci minha senha</b> para receber um novo — ou peça ao escritório para reenviar
+            o convite.
+          </p>
+          <Link to="/login" className="btn-primary mt-6 h-11 w-full">
+            Ir para a entrada
+          </Link>
+        </>
+      ) : (
+        <>
+          <p className="eyebrow">Primeiro acesso</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-800">Crie sua senha</h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+            Para entrar como <span className="font-semibold text-slate-700">{session.user.email}</span>.
+            Só você vai saber essa senha — o escritório não tem acesso a ela.
+          </p>
 
-        {loading ? (
-          <p className="text-sm text-slate-500">Carregando…</p>
-        ) : !session ? (
-          <>
-            <h1 className="text-xl font-semibold text-slate-800">Link expirado ou inválido</h1>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">
-              O link do e-mail vale por pouco tempo e só pode ser usado uma vez. Na tela de entrada,
-              use <b>Esqueci minha senha</b> para receber um novo — ou peça ao escritório para reenviar
-              o convite.
-            </p>
-            <Link to="/login" className="btn-primary mt-6 w-full">
-              Ir para a entrada
-            </Link>
-          </>
-        ) : (
-          <>
-            <h1 className="text-xl font-semibold text-slate-800">Crie sua senha</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              Para entrar como <span className="font-medium text-slate-700">{session.user.email}</span>.
-              Só você vai saber essa senha — o escritório não tem acesso a ela.
-            </p>
-
-            <form onSubmit={salvar} className="mt-6 space-y-4">
-              <div>
-                <label className="label" htmlFor="senha">
-                  Nova senha
-                </label>
-                <input
-                  id="senha"
-                  type="password"
-                  autoComplete="new-password"
-                  className="input"
-                  value={senha}
-                  onChange={(e) => setSenha(e.target.value)}
-                  required
-                />
-                <p className="mt-1 text-xs text-slate-400">Pelo menos {MINIMO} caracteres.</p>
+          <form onSubmit={salvar} className="mt-6 space-y-4">
+            <div>
+              <label className="label" htmlFor="senha">
+                Nova senha
+              </label>
+              <CampoSenha
+                id="senha"
+                value={senha}
+                onChange={setSenha}
+                autoComplete="new-password"
+                icone={<IconChave className="h-[18px] w-[18px]" />}
+              />
+              <div className="mt-2 flex items-center gap-2" aria-live="polite">
+                <div className="flex flex-1 gap-1" aria-hidden="true">
+                  {[0, 1, 2, 3].map((i) => (
+                    <span
+                      key={i}
+                      className={`h-1 flex-1 rounded-full transition-colors duration-300 ${
+                        i < forca.nivel ? forca.cor : 'bg-slate-200'
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="w-24 text-right text-xs font-semibold text-slate-500">
+                  {senha ? forca.texto : `mín. ${MINIMO} caracteres`}
+                </span>
               </div>
-              <div>
-                <label className="label" htmlFor="confirma">
-                  Repita a senha
-                </label>
-                <input
-                  id="confirma"
-                  type="password"
-                  autoComplete="new-password"
-                  className="input"
-                  value={confirma}
-                  onChange={(e) => setConfirma(e.target.value)}
-                  required
-                />
-              </div>
+            </div>
+            <div>
+              <label className="label" htmlFor="confirma">
+                Repita a senha
+              </label>
+              <CampoSenha
+                id="confirma"
+                value={confirma}
+                onChange={setConfirma}
+                autoComplete="new-password"
+                icone={<IconChave className="h-[18px] w-[18px]" />}
+              />
+              {confirma && (
+                <p className={`mt-1.5 flex items-center gap-1 text-xs font-semibold ${iguais ? 'text-green-700' : 'text-slate-500'}`}>
+                  {iguais ? (
+                    <>
+                      <IconCheck className="h-3.5 w-3.5" /> As senhas são iguais
+                    </>
+                  ) : (
+                    'As senhas ainda não são iguais'
+                  )}
+                </p>
+              )}
+            </div>
 
-              {erro && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+            {erro && (
+              <p className="alert alert-error" role="alert">
+                {erro}
+              </p>
+            )}
 
-              <button type="submit" className="btn-primary w-full" disabled={busy || pronto}>
-                {busy || pronto ? 'Salvando…' : 'Salvar senha e entrar'}
-              </button>
-            </form>
-          </>
-        )}
-      </div>
-    </div>
+            <button type="submit" className="btn-primary h-11 w-full" disabled={busy || pronto}>
+              {(busy || pronto) && <Spinner />}
+              {busy || pronto ? 'Salvando…' : 'Salvar senha e entrar'}
+            </button>
+          </form>
+        </>
+      )}
+    </AuthShell>
   );
+}
+
+/** Indicação simples da força (tamanho + variedade); quem decide de verdade é o Supabase. */
+function forcaDaSenha(s: string): { nivel: number; texto: string; cor: string } {
+  if (!s) return { nivel: 0, texto: '', cor: 'bg-slate-200' };
+  if (s.length < MINIMO) return { nivel: 1, texto: 'curta demais', cor: 'bg-red-500' };
+  const tipos = [/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter((r) => r.test(s)).length;
+  const pontos = tipos + (s.length >= 12 ? 1 : 0);
+  if (pontos <= 2) return { nivel: 2, texto: 'razoável', cor: 'bg-amber-500' };
+  if (pontos === 3) return { nivel: 3, texto: 'boa', cor: 'bg-brand-500' };
+  return { nivel: 4, texto: 'forte', cor: 'bg-green-500' };
 }

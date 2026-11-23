@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconHistorico, IconLixeira, IconMais, IconSetaDireita, IconX } from '@/components/icons';
+import { CarregandoLinhas, ErroCarregar, PageHeader, Vazio } from '@/components/ui';
 import { Paginacao, useItensPorPagina } from '@/components/Paginacao';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/useAuth';
@@ -11,11 +13,11 @@ import { useDeleteStatement, useStatementsPaginados } from '@/features/statement
 import { dataHora, parteAprovada, situacaoAprovacao } from './aprovacao';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
-  parsing: { text: 'lendo', cls: 'bg-slate-100 text-slate-600' },
-  classificacao: { text: 'classificando', cls: 'bg-brand-100 text-brand-800' },
-  revisao: { text: 'puxado p/ importação', cls: 'bg-amber-100 text-amber-800' },
-  gerado: { text: 'arquivo gerado', cls: 'bg-green-100 text-green-700' },
-  erro: { text: 'erro', cls: 'bg-red-100 text-red-700' },
+  parsing: { text: 'lendo', cls: 'chip-slate' },
+  classificacao: { text: 'classificando', cls: 'chip-brand' },
+  revisao: { text: 'puxado p/ importação', cls: 'chip-amber' },
+  gerado: { text: 'arquivo gerado', cls: 'chip-green' },
+  erro: { text: 'erro', cls: 'chip-red' },
 };
 
 export function ClassificacaoHistoricoPage() {
@@ -44,16 +46,20 @@ export function ClassificacaoHistoricoPage() {
   const shown = statements ?? [];
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-800">Histórico — Classificação</h1>
-        <Link to="/classificacao" className="btn-primary">
-          + Classificar extrato
-        </Link>
-      </div>
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Histórico da classificação"
+        descricao="Todos os extratos enviados para classificar, com a situação e a aprovação do cliente."
+        acoes={
+          <Link to="/classificacao" className="btn-primary">
+            <IconMais className="h-4 w-4" />
+            Classificar extrato
+          </Link>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2">
-        <select className="input max-w-xs" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+        <select className="input max-w-xs" aria-label="Filtrar por cliente" value={clientId} onChange={(e) => setClientId(e.target.value)}>
           <option value="">Todos os clientes</option>
           {clients?.map((c) => (
             <option key={c.id} value={c.id}>
@@ -62,7 +68,8 @@ export function ClassificacaoHistoricoPage() {
           ))}
         </select>
         {clientId && (
-          <button className="text-sm text-slate-400 hover:text-slate-600" onClick={() => setClientId('')}>
+          <button className="btn-quiet btn-sm" onClick={() => setClientId('')}>
+            <IconX className="h-3.5 w-3.5" />
             limpar filtro
           </button>
         )}
@@ -80,18 +87,24 @@ export function ClassificacaoHistoricoPage() {
 
       <div className="card overflow-x-auto">
         {isLoading ? (
-          <p className="p-6 text-sm text-slate-400">Carregando…</p>
+          <CarregandoLinhas />
         ) : error ? (
-          <p className="p-6 text-sm text-red-600">
-            {error instanceof Error ? error.message : 'Falha ao carregar'}
-          </p>
+          <ErroCarregar erro={error} className="m-5" />
         ) : !shown.length ? (
-          <p className="p-6 text-sm text-slate-400">
-            {clientId ? 'Nenhum extrato com esse filtro.' : 'Nenhum extrato classificado ainda.'}
-          </p>
+          <Vazio
+            icone={<IconHistorico className="h-6 w-6" />}
+            titulo={clientId ? 'Nenhum extrato com esse filtro' : 'Nenhum extrato classificado ainda'}
+            acao={
+              !clientId && (
+                <Link to="/classificacao" className="btn-primary">
+                  Classificar o primeiro extrato
+                </Link>
+              )
+            }
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Cliente</th>
                 <th className="px-4 py-2">Arquivo</th>
@@ -106,8 +119,8 @@ export function ClassificacaoHistoricoPage() {
               {shown.map((s: Statement) => {
                 const enviado = ehCliente && (s.status === 'revisao' || s.status === 'gerado');
                 const st = enviado
-                  ? { text: 'enviado à contabilidade', cls: 'bg-green-100 text-green-700' }
-                  : (STATUS_LABEL[s.status] ?? { text: s.status, cls: 'bg-slate-100 text-slate-600' });
+                  ? { text: 'enviado à contabilidade', cls: 'chip-green' }
+                  : (STATUS_LABEL[s.status] ?? { text: s.status, cls: 'chip-slate' });
                 const totais = 'qtd' in s.totais ? s.totais : null;
                 // login de cliente sempre abre pela Classificação (a Revisão da Importação é do escritório)
                 const destino =
@@ -118,7 +131,7 @@ export function ClassificacaoHistoricoPage() {
                     <td className="px-4 py-2 font-medium text-slate-800">{s.client?.razao_social ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-600">
                       {s.arquivo_nome}
-                      <span className="ml-1 text-xs text-slate-400">{s.formato.toUpperCase()}</span>
+                      <span className="ml-1.5 font-mono text-[10px] font-semibold text-slate-400">{s.formato.toUpperCase()}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-slate-600">
                       {s.period_start && s.period_end
@@ -127,20 +140,21 @@ export function ClassificacaoHistoricoPage() {
                     </td>
                     <td className="px-4 py-2 text-right text-slate-600">{totais?.qtd ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${st.cls}`}>{st.text}</span>
+                      <span className={`chip chip-dot ${st.cls}`}>{st.text}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2">
                       <SeloAprovacao s={s} ehCliente={ehCliente} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {s.status !== 'parsing' && (
-                        <Link to={destino} className="text-brand-600 hover:underline">
+                        <Link to={destino} className="link">
                           {s.status === 'classificacao' ? 'classificar' : 'abrir'}
+                          <IconSetaDireita className="h-3.5 w-3.5" />
                         </Link>
                       )}
                       {podeExcluir && (
-                        <button className="ml-3 text-slate-400 hover:text-red-600" onClick={() => setDeleting(s)}>
-                          excluir
+                        <button className="link-danger ml-4" onClick={() => setDeleting(s)} title="Excluir extrato" aria-label={`Excluir ${s.arquivo_nome}`}>
+                          <IconLixeira className="h-4 w-4" />
                         </button>
                       )}
                     </td>
@@ -186,7 +200,7 @@ function SeloAprovacao({ s, ehCliente }: { s: Statement; ehCliente: boolean }) {
   if (situacao === 'aprovado') {
     return (
       <span
-        className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700"
+        className="chip chip-green"
         title={`Aprovado por ${s.aprovado_por_email ?? 'cliente'} em ${dataHora(s.aprovado_em!)}`}
       >
         ✓ aprovado {new Date(s.aprovado_em!).toLocaleDateString('pt-BR')}
@@ -196,7 +210,7 @@ function SeloAprovacao({ s, ehCliente }: { s: Statement; ehCliente: boolean }) {
   if (situacao === 'parcial') {
     return (
       <span
-        className="whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-800"
+        className="chip chip-sky"
         title={`Aprovação parcial: ${s.aprovado_por_email ?? 'cliente'} aprovou ${parteAprovada(s)} lançamentos em ${dataHora(s.aprovado_em!)}`}
       >
         parcial {parteAprovada(s).replace(' de ', '/')} · {new Date(s.aprovado_em!).toLocaleDateString('pt-BR')}
@@ -206,7 +220,7 @@ function SeloAprovacao({ s, ehCliente }: { s: Statement; ehCliente: boolean }) {
   if (situacao === 'alterado') {
     return (
       <span
-        className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800"
+        className="chip chip-amber"
         title={`Aprovado por ${s.aprovado_por_email ?? 'cliente'} em ${dataHora(s.aprovado_em!)}; classificações alteradas em ${dataHora(s.classificacao_alterada_em!)}`}
       >
         alterado após aprovação

@@ -1,4 +1,6 @@
 import { useForm } from 'react-hook-form';
+import { Spinner } from '@/components/icons';
+import { Secao } from '@/components/ui';
 import type { Client, ClientInput } from '@/lib/types';
 import { ApiError } from '@/lib/api';
 
@@ -75,18 +77,19 @@ export function ClientForm({
         : null;
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form onSubmit={submit} className="space-y-6">
+      <Secao titulo="Identificação">
       <div>
         <label className="label">Razão social</label>
-        <input className="input" {...register('razao_social', { required: true, minLength: 2 })} />
-        {errors.razao_social && <p className="mt-1 text-xs text-red-600">obrigatório</p>}
+        <input className="input" autoFocus={!client} {...register('razao_social', { required: true, minLength: 2 })} />
+        {errors.razao_social && <p className="mt-1 text-xs font-semibold text-red-600">obrigatório</p>}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">CNPJ / CPF</label>
           <input
-            className="input"
+            className="input input-mono"
             placeholder="00.000.000/0000-00"
             {...register('cnpj', { required: true })}
           />
@@ -94,22 +97,27 @@ export function ClientForm({
         <div>
           <label className="label">Código no Domínio</label>
           <input
-            className="input"
+            className="input input-mono"
             placeholder="168"
             inputMode="numeric"
             {...register('dominio_code', { required: true, pattern: /^\d{1,7}$/ })}
           />
           {errors.dominio_code && (
-            <p className="mt-1 text-xs text-red-600">só números, até 7 dígitos</p>
+            <p className="mt-1 text-xs font-semibold text-red-600">só números, até 7 dígitos</p>
           )}
         </div>
       </div>
+      </Secao>
+
+      <div className="divider" />
+
+      <Secao titulo="Banco e Domínio" descricao="Vêm preenchidos em cada importação deste cliente.">
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">Conta contábil do banco (padrão)</label>
           <input
-            className="input"
+            className="input input-mono"
             placeholder="ex: 10002 — pode deixar em branco"
             {...register('banco_conta_contabil')}
           />
@@ -117,12 +125,12 @@ export function ClientForm({
         <div>
           <label className="label">Saldo inicial da conta bancária</label>
           <input
-            className="input"
+            className="input tabular-nums"
             inputMode="decimal"
             placeholder="0,00"
             {...register('saldo_inicial')}
           />
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="hint">
             usado na conferência do saldo ao importar o extrato
           </p>
         </div>
@@ -131,16 +139,16 @@ export function ClientForm({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
           <label className="label">Cód. histórico entrada</label>
-          <input className="input" inputMode="numeric" {...register('hist_code_entrada')} />
+          <input className="input input-mono" inputMode="numeric" {...register('hist_code_entrada')} />
         </div>
         <div>
           <label className="label">Cód. histórico saída</label>
-          <input className="input" inputMode="numeric" {...register('hist_code_saida')} />
+          <input className="input input-mono" inputMode="numeric" {...register('hist_code_saida')} />
         </div>
         <div>
           <label className="label">Dígitos da conta</label>
           <input
-            className="input"
+            className="input input-mono"
             type="number"
             min={1}
             max={20}
@@ -148,6 +156,10 @@ export function ClientForm({
           />
         </div>
       </div>
+
+      </Secao>
+
+      <div className="divider" />
 
       <div>
         <label className="label">Observações</label>
@@ -163,27 +175,28 @@ export function ClientForm({
             placeholder="cliente@empresa.com.br"
             {...register('email_acesso', { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/ })}
           />
-          {errors.email_acesso && <p className="mt-1 text-xs text-red-600">e-mail inválido</p>}
-          <p className="mt-1 text-xs text-slate-400">
+          {errors.email_acesso && <p className="mt-1 text-xs font-semibold text-red-600">e-mail inválido</p>}
+          <p className="hint">
             Se preencher, o cliente recebe um convite por e-mail para criar a senha e passa a ver só o
             módulo Classificação desta empresa. Pode deixar em branco e liberar depois, na edição.
           </p>
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm text-slate-700">
+      <label className="flex w-fit cursor-pointer items-center gap-2 rounded-xl border border-brand-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-brand-50">
         <input type="checkbox" {...register('ativo')} />
         Cliente ativo
       </label>
 
-      {apiMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{apiMsg}</p>}
+      {apiMsg && <p className="alert alert-error">{apiMsg}</p>}
 
       <div className="flex justify-end gap-2 pt-2">
         <button type="button" className="btn-ghost" onClick={onCancel}>
           Cancelar
         </button>
         <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? 'Salvando…' : client ? 'Salvar' : 'Cadastrar'}
+          {submitting && <Spinner />}
+          {submitting ? 'Salvando…' : client ? 'Salvar alterações' : 'Cadastrar cliente'}
         </button>
       </div>
     </form>

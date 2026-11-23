@@ -5,6 +5,8 @@ import { formatDate } from '@/lib/format';
 import type { ComplementoModo } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
 import { useStatement, useStatements, useUpdateStatementHeader } from '@/features/statements/api';
+import { IconSetaDireita, Spinner } from '@/components/icons';
+import { Carregando, Secao } from '@/components/ui';
 
 const MODO_OPTIONS: { value: ComplementoModo; label: string }[] = [
   { value: 'extrato_classificacao', label: 'Histórico do extrato + classificação' },
@@ -73,123 +75,153 @@ export function PuxarClassificacaoForm({ initialStatementId }: { initialStatemen
   const errMsg = err instanceof ApiError ? err.message : err ? String(err) : null;
 
   return (
-    <form onSubmit={submit} className="card space-y-4 p-6">
-      <div>
-        <label className="label">Cliente</label>
-        <select
-          className="input"
-          value={clientId}
-          onChange={(e) => {
-            setClientId(e.target.value);
-            setSelectedId('');
-          }}
-          disabled={loadingClients}
-          required
-        >
-          <option value="">{loadingClients ? 'Carregando…' : 'Selecione…'}</option>
-          {clients?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.razao_social} — Domínio {c.dominio_code}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {clientId && (
+    <form onSubmit={submit} className="card animate-fade-up space-y-7 p-6 sm:p-7">
+      <Secao numero={1} titulo="Cliente e extrato classificado">
         <div>
-          <label className="label">Extrato classificado</label>
-          {loadingStmts ? (
-            <p className="text-sm text-slate-400">Carregando…</p>
-          ) : !pendentes?.length ? (
-            <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">
-              Nenhum extrato pendente de puxar pra esse cliente.{' '}
-              <Link to="/classificacao" className="text-brand-600 hover:underline">
-                Classifique um extrato primeiro →
-              </Link>
-            </p>
-          ) : (
-            <ul className="divide-y divide-slate-100 rounded-md border border-slate-200">
-              {pendentes.map((s) => {
-                const totais = 'qtd' in s.totais ? s.totais : null;
-                return (
-                  <li key={s.id}>
-                    <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50">
-                      <input
-                        type="radio"
-                        name="statement"
-                        checked={selectedId === s.id}
-                        onChange={() => setSelectedId(s.id)}
-                      />
-                      <span className="flex-1">
-                        {s.arquivo_nome}
-                        {s.period_start && s.period_end && (
-                          <span className="ml-2 text-xs text-slate-400">
-                            {formatDate(s.period_start)}–{formatDate(s.period_end)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-xs text-slate-400">{totais?.qtd ?? 0} lanç.</span>
-                    </label>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
+          <label className="label" htmlFor="puxar-cliente">
+            Cliente
+          </label>
+          <select
+            id="puxar-cliente"
+            className="input"
+            value={clientId}
+            onChange={(e) => {
+              setClientId(e.target.value);
+              setSelectedId('');
+            }}
+            disabled={loadingClients}
+            required
+          >
+            <option value="">{loadingClients ? 'Carregando…' : 'Selecione o cliente…'}</option>
+            {clients?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.razao_social} — Domínio {c.dominio_code}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+
+        {clientId && (
+          <div>
+            <p className="label">Extrato classificado</p>
+            {loadingStmts ? (
+              <Carregando />
+            ) : !pendentes?.length ? (
+              <div className="rounded-xl border border-dashed border-brand-200 bg-slate-50/60 px-4 py-3 text-sm text-slate-500">
+                Nenhum extrato pendente de puxar pra esse cliente.{' '}
+                <Link to="/classificacao" className="link">
+                  Classifique um extrato primeiro →
+                </Link>
+              </div>
+            ) : (
+              <ul className="grid gap-2" role="radiogroup" aria-label="Extrato classificado">
+                {pendentes.map((s) => {
+                  const totais = 'qtd' in s.totais ? s.totais : null;
+                  const marcado = selectedId === s.id;
+                  return (
+                    <li key={s.id}>
+                      <label
+                        className={`flex cursor-pointer items-center gap-3 rounded-xl border px-4 py-3 text-sm transition-all ${
+                          marcado
+                            ? 'border-brand-400 bg-brand-50/70 shadow-glow'
+                            : 'border-brand-200 bg-white hover:border-brand-300 hover:bg-brand-50/40'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="statement"
+                          checked={marcado}
+                          onChange={() => setSelectedId(s.id)}
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-slate-800">{s.arquivo_nome}</span>
+                          {s.period_start && s.period_end && (
+                            <span className="block text-xs text-slate-500">
+                              {formatDate(s.period_start)} a {formatDate(s.period_end)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="chip chip-brand">{totais?.qtd ?? 0} lanç.</span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
+      </Secao>
 
       {selectedId && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="label">Conta contábil do banco</label>
-              <input
-                className="input"
-                value={contaBanco}
-                onChange={(e) => setContaBanco(e.target.value)}
-                placeholder="ex: 10002"
-                required
-              />
+          <div className="divider" />
+          <Secao numero={2} titulo="Parâmetros do Domínio" descricao="Dá pra trocar depois, na tela de Revisão.">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="col-span-2 sm:col-span-1">
+                <label className="label" htmlFor="puxar-conta">
+                  Conta do banco
+                </label>
+                <input
+                  id="puxar-conta"
+                  className="input input-mono"
+                  value={contaBanco}
+                  onChange={(e) => setContaBanco(e.target.value)}
+                  placeholder="ex: 10002"
+                  required
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className="label" htmlFor="puxar-lote">
+                  Lote (Domínio)
+                </label>
+                <input
+                  id="puxar-lote"
+                  className="input input-mono"
+                  type="number"
+                  min={0}
+                  value={lote}
+                  onChange={(e) => setLote(Number(e.target.value))}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="puxar-he">
+                  Hist. entrada
+                </label>
+                <input id="puxar-he" className="input input-mono" value={histEntrada} onChange={(e) => setHistEntrada(e.target.value)} />
+              </div>
+              <div>
+                <label className="label" htmlFor="puxar-hs">
+                  Hist. saída
+                </label>
+                <input id="puxar-hs" className="input input-mono" value={histSaida} onChange={(e) => setHistSaida(e.target.value)} />
+              </div>
             </div>
-            <div>
-              <label className="label">Número do lote (Domínio)</label>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                value={lote}
-                onChange={(e) => setLote(Number(e.target.value))}
-              />
-            </div>
-            <div>
-              <label className="label">Cód. histórico entrada</label>
-              <input className="input" value={histEntrada} onChange={(e) => setHistEntrada(e.target.value)} />
-            </div>
-            <div>
-              <label className="label">Cód. histórico saída</label>
-              <input className="input" value={histSaida} onChange={(e) => setHistSaida(e.target.value)} />
-            </div>
-          </div>
 
-          <div>
-            <label className="label">Complemento no arquivo do Domínio</label>
-            <select className="input" value={modo} onChange={(e) => setModo(e.target.value as ComplementoModo)}>
-              {MODO_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-slate-400">Dá pra trocar depois, na tela de Revisão.</p>
-          </div>
+            <div>
+              <label className="label" htmlFor="puxar-modo">
+                Complemento no arquivo do Domínio
+              </label>
+              <select id="puxar-modo" className="input" value={modo} onChange={(e) => setModo(e.target.value as ComplementoModo)}>
+                {MODO_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Secao>
         </>
       )}
 
-      {errMsg && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{errMsg}</p>}
+      {errMsg && <p className="alert alert-error">{errMsg}</p>}
 
-      <button type="submit" className="btn-primary w-full" disabled={!canSubmit}>
-        {header.isPending ? 'Enviando…' : 'Ir para revisão →'}
-      </button>
+      <div className="flex justify-end">
+        <button type="submit" className="btn-primary sm:min-w-[12rem]" disabled={!canSubmit}>
+          {header.isPending && <Spinner />}
+          {header.isPending ? 'Enviando…' : 'Ir para revisão'}
+          {!header.isPending && <IconSetaDireita className="h-4 w-4" />}
+        </button>
+      </div>
     </form>
   );
 }

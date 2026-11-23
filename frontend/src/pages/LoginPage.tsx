@@ -4,7 +4,8 @@ import { useAuth } from '@/auth/useAuth';
 import { supabase } from '@/lib/supabase';
 import { destinoSeguro } from '@/lib/destino';
 import { avisoDeInatividadePendente } from '@/auth/inatividade';
-import { FinanceIllustration } from '@/components/FinanceIllustration';
+import { IconChave, IconEmail, IconSetaDireita, IconSetaEsquerda, Spinner } from '@/components/icons';
+import { AuthShell, CampoIcone, CampoSenha } from './AuthShell';
 
 /** As mensagens mais comuns do Supabase Auth, em português. */
 function traduzir(msg: string): string {
@@ -64,79 +65,59 @@ export function LoginPage() {
   }
 
   return (
-    <div className="grid min-h-screen bg-cream lg:grid-cols-2">
-      {/* painel da marca */}
-      <div className="relative hidden flex-col overflow-hidden bg-brand-800 p-10 text-white lg:flex">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/[0.14] text-sm font-bold text-white">
-            FC
-          </span>
-          <span className="text-base font-semibold">Facility Contábil</span>
-        </div>
-        <div className="flex flex-1 items-center justify-center py-8">
-          <FinanceIllustration className="w-full max-w-lg" />
-        </div>
-        <p className="max-w-sm text-sm leading-relaxed text-white/55">
-          Do extrato bancário ao arquivo do Domínio — importação, classificação e conferência
-          num lugar só.
-        </p>
-      </div>
-
-      {/* formulário */}
-      <div className="flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 flex items-center gap-2.5 lg:hidden">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-800 text-sm font-bold text-cream">
-              FC
-            </span>
-            <span className="text-base font-semibold text-slate-800">Facility Contábil</span>
-          </div>
-
-          {esqueci ? (
-            <>
-              <h1 className="text-xl font-semibold text-slate-800">Esqueci minha senha</h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Informe seu e-mail de acesso: enviamos um link para você criar uma nova senha.
-              </p>
-              <form onSubmit={onEsqueci} className="mt-6 space-y-4">
-                <div>
-                  <label className="label" htmlFor="email-esqueci">
-                    E-mail
-                  </label>
-                  <input
-                    id="email-esqueci"
-                    type="email"
-                    autoComplete="username"
-                    className="input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-                {aviso && <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">{aviso}</p>}
-                <button type="submit" className="btn-primary w-full" disabled={busy}>
-                  {busy ? 'Enviando…' : 'Enviar link'}
-                </button>
-                <button
-                  type="button"
-                  className="w-full text-center text-sm text-brand-600 hover:underline"
-                  onClick={() => {
-                    setEsqueci(false);
-                    setError(null);
-                    setAviso(null);
-                  }}
-                >
-                  Voltar para a entrada
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-          <h1 className="text-xl font-semibold text-slate-800">Entrar</h1>
-          <p className="mt-1 text-sm text-slate-500">Entre com o seu e-mail e senha.</p>
+    <AuthShell>
+      {esqueci ? (
+        <>
+          <p className="eyebrow">Recuperar acesso</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-800">Esqueci minha senha</h1>
+          <p className="mt-1.5 text-sm leading-relaxed text-slate-500">
+            Informe seu e-mail de acesso: enviamos um link para você criar uma nova senha.
+          </p>
+          <form onSubmit={onEsqueci} className="mt-6 space-y-4">
+            <div>
+              <label className="label" htmlFor="email-esqueci">
+                E-mail
+              </label>
+              <CampoIcone icone={<IconEmail className="h-[18px] w-[18px]" />}>
+                <input
+                  id="email-esqueci"
+                  type="email"
+                  autoComplete="username"
+                  className="input h-11 pl-10"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@empresa.com.br"
+                  required
+                />
+              </CampoIcone>
+            </div>
+            {error && <p className="alert alert-error" role="alert">{error}</p>}
+            {aviso && <p className="alert alert-success" role="status">{aviso}</p>}
+            <button type="submit" className="btn-primary h-11 w-full" disabled={busy}>
+              {busy && <Spinner />}
+              {busy ? 'Enviando…' : 'Enviar link'}
+            </button>
+            <button
+              type="button"
+              className="link w-full justify-center text-sm"
+              onClick={() => {
+                setEsqueci(false);
+                setError(null);
+                setAviso(null);
+              }}
+            >
+              <IconSetaEsquerda className="h-4 w-4" />
+              Voltar para a entrada
+            </button>
+          </form>
+        </>
+      ) : (
+        <>
+          <p className="eyebrow">Acesso seguro</p>
+          <h1 className="mt-2 text-2xl font-semibold text-slate-800">Entrar</h1>
+          <p className="mt-1.5 text-sm text-slate-500">Entre com o seu e-mail e senha.</p>
           {saiuPorInatividade && (
-            <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <p className="alert alert-warn mt-4">
               Por segurança, a sessão foi encerrada depois de 1 hora sem uso. Entre de novo.
             </p>
           )}
@@ -146,53 +127,59 @@ export function LoginPage() {
               <label className="label" htmlFor="email">
                 E-mail
               </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="username"
-                className="input"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <CampoIcone icone={<IconEmail className="h-[18px] w-[18px]" />}>
+                <input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  className="input h-11 pl-10"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="voce@empresa.com.br"
+                  autoFocus
+                  required
+                />
+              </CampoIcone>
             </div>
             <div>
-              <label className="label" htmlFor="password">
-                Senha
-              </label>
-              <input
+              <div className="flex items-baseline justify-between">
+                <label className="label" htmlFor="password">
+                  Senha
+                </label>
+                <button
+                  type="button"
+                  className="link text-xs"
+                  onClick={() => {
+                    setEsqueci(true);
+                    setError(null);
+                  }}
+                >
+                  Esqueci minha senha
+                </button>
+              </div>
+              <CampoSenha
                 id="password"
-                type="password"
-                autoComplete="current-password"
-                className="input"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
+                onChange={setPassword}
+                autoComplete="current-password"
+                icone={<IconChave className="h-[18px] w-[18px]" />}
               />
             </div>
 
             {error && (
-              <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+              <p className="alert alert-error" role="alert">
+                {error}
+              </p>
             )}
 
-            <button type="submit" className="btn-primary w-full" disabled={busy}>
+            <button type="submit" className="btn-primary h-11 w-full" disabled={busy}>
+              {busy && <Spinner />}
               {busy ? 'Entrando…' : 'Entrar'}
-            </button>
-            <button
-              type="button"
-              className="w-full text-center text-sm text-brand-600 hover:underline"
-              onClick={() => {
-                setEsqueci(true);
-                setError(null);
-              }}
-            >
-              Esqueci minha senha
+              {!busy && <IconSetaDireita className="h-4 w-4" />}
             </button>
           </form>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+        </>
+      )}
+    </AuthShell>
   );
 }

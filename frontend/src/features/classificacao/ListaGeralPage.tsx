@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconLixeira, IconMais, Spinner } from '@/components/icons';
+import { CarregandoLinhas, ErroCarregar, PageHeader, Vazio } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import type { ClassificacaoGeral, Direction } from '@/lib/types';
 import { useClassificacoesGerais, useCreateGeral, useDeleteGeral } from './api';
@@ -14,20 +16,17 @@ export function ListaGeralPage() {
   const podeEditar = data?.pode_editar ?? false;
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Lista geral de classificações</h1>
-        <p className="text-sm text-slate-500">
-          A lista do escritório (limpeza e higiene, energia elétrica…). Cada cliente escolhe dela, no módulo
-          Classificação, o que vai usar — pelos botões “Adicionar classificações de entradas/saídas”. A lista que o
-          cliente monta vale para todas as empresas dele.
-        </p>
+    <section className="space-y-6">
+      <PageHeader
+        titulo="Lista geral de classificações"
+        descricao="A lista do escritório (limpeza e higiene, energia elétrica…). Cada cliente escolhe dela, no módulo Classificação, o que vai usar — pelos botões “Adicionar classificações de entradas/saídas”. A lista que o cliente monta vale para todas as empresas dele."
+      >
         {data && !podeEditar && (
-          <p className="mt-2 rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
+          <p className="alert alert-info">
             Só quem administra o escritório (Cadastros → Equipe) inclui ou exclui itens da lista geral.
           </p>
         )}
-      </div>
+      </PageHeader>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Coluna direction="saida" titulo="Saídas" podeEditar={podeEditar} />
@@ -55,10 +54,12 @@ function Coluna({ direction, titulo, podeEditar }: { direction: Direction; titul
   const itens = data?.gerais ?? [];
 
   return (
-    <div className="card p-4">
-      <p className="mb-2 text-sm font-medium text-slate-700">
-        {titulo} <span className="font-normal text-slate-400">({itens.length})</span>
-      </p>
+    <div className="card p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${direction === 'entrada' ? 'bg-green-500' : 'bg-red-500'}`} />
+        <p className="card-title">{titulo}</p>
+        <span className="chip chip-slate">{itens.length}</span>
+      </div>
 
       {podeEditar && (
         <form onSubmit={incluir} className="mb-3 flex gap-2">
@@ -69,6 +70,7 @@ function Coluna({ direction, titulo, podeEditar }: { direction: Direction; titul
             placeholder={direction === 'saida' ? 'ex: LIMPEZA E HIGIENE' : 'ex: RECEBIMENTO DE CLIENTES'}
           />
           <button className="btn-primary h-9 px-3" disabled={!nome.trim() || criar.isPending}>
+            {criar.isPending ? <Spinner /> : <IconMais className="h-4 w-4" />}
             {criar.isPending ? 'Incluindo…' : 'Incluir'}
           </button>
         </form>
@@ -76,18 +78,19 @@ function Coluna({ direction, titulo, podeEditar }: { direction: Direction; titul
       {erroCriar && <p className="mb-3 text-xs text-red-600">{erroCriar}</p>}
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">Carregando…</p>
+        <CarregandoLinhas linhas={4} className="px-0" />
       ) : error ? (
-        <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Falha ao carregar'}</p>
+        <ErroCarregar erro={error} />
       ) : !itens.length ? (
-        <p className="text-sm text-slate-400">Nenhum item ainda.</p>
+        <Vazio titulo="Nenhum item ainda" texto={podeEditar ? 'Inclua o primeiro pelo campo acima.' : undefined} className="py-6" />
       ) : (
         <ul className="divide-y divide-slate-100">
           {itens.map((g) => (
-            <li key={g.id} className="flex items-center justify-between gap-2 py-2 text-sm text-slate-700">
+            <li key={g.id} className="group flex items-center justify-between gap-2 rounded-lg px-1 py-2 text-sm text-slate-700 transition-colors hover:bg-brand-50/50">
               <span>{g.nome}</span>
               {podeEditar && (
-                <button className="text-xs text-slate-400 hover:text-red-600" onClick={() => setExcluindo(g)}>
+                <button className="link-danger text-xs opacity-60 group-hover:opacity-100" onClick={() => setExcluindo(g)}>
+                  <IconLixeira className="h-3.5 w-3.5" />
                   excluir
                 </button>
               )}

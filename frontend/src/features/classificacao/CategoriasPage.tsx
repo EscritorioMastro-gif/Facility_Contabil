@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconEmpresa } from '@/components/icons';
+import { CarregandoLinhas, ErroCarregar, PageHeader, Vazio } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/useAuth';
 import type { Classificacao, Direction } from '@/lib/types';
@@ -29,18 +31,19 @@ export function CategoriasPage() {
   const lista = [...(entradas ?? []), ...(saidas ?? [])];
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">{ehCliente ? 'Minhas classificações' : 'Classificações'}</h1>
-        <p className="text-sm text-slate-500">
-          {ehCliente
+    <section className="space-y-6">
+      <PageHeader
+        titulo={ehCliente ? 'Minhas classificações' : 'Classificações'}
+        descricao={
+          ehCliente
             ? 'As classificações que você usa nos extratos (água, energia, recebimento de clientes…). Escolha da lista geral do escritório; a lista vale para todas as suas empresas e para qualquer mês.'
-            : 'Classificações de cada cliente (água, energia, telefone, recebimento de clientes…), escolhidas da lista geral do escritório. A lista é a mesma em todas as empresas do mesmo login de cliente e vale pra qualquer mês.'}
-        </p>
-      </div>
+            : 'Classificações de cada cliente (água, energia, telefone, recebimento de clientes…), escolhidas da lista geral do escritório. A lista é a mesma em todas as empresas do mesmo login de cliente e vale pra qualquer mês.'
+        }
+      />
 
       <select
         className="input max-w-md"
+        aria-label={ehCliente ? 'Empresa' : 'Cliente'}
         value={clientId}
         onChange={(e) => setEscolhido(e.target.value)}
         disabled={loadingClients}
@@ -55,7 +58,13 @@ export function CategoriasPage() {
       </select>
 
       {!clientId ? (
-        <p className="card p-6 text-sm text-slate-400">{ehCliente ? 'Escolha uma empresa.' : 'Escolha um cliente.'}</p>
+        <div className="card">
+          <Vazio
+            icone={<IconEmpresa className="h-6 w-6" />}
+            titulo={ehCliente ? 'Escolha uma empresa' : 'Escolha um cliente'}
+            texto="As classificações de entradas e saídas aparecem aqui."
+          />
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Catalogo clientId={clientId} direction="saida" titulo="Saídas" items={saidas} lista={lista} isLoading={ls} error={es} />
@@ -137,10 +146,14 @@ function Catalogo({
     updateMut.error instanceof ApiError ? updateMut.error.message : updateMut.error ? 'Falha ao salvar' : null;
 
   return (
-    <div className="card p-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-slate-700">{titulo}</p>
-        <AdicionarDaListaGeral clientId={clientId} direction={direction} naLista={lista} className="btn-ghost h-8 px-2.5 text-xs" />
+    <div className="card p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2">
+          <span className={`h-2 w-2 rounded-full ${direction === 'entrada' ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className="card-title">{titulo}</span>
+          {items && <span className="chip chip-slate">{items.length}</span>}
+        </p>
+        <AdicionarDaListaGeral clientId={clientId} direction={direction} naLista={lista} className="btn-ghost btn-sm" />
       </div>
 
       {/* classificação avulsa (fora da lista geral): só o escritório */}
@@ -159,18 +172,18 @@ function Catalogo({
       )}
       {createErr && <p className="mb-3 text-xs text-red-600">{createErr}</p>}
       {updateErr && <p className="mb-3 text-xs text-red-600">{updateErr}</p>}
-      {aviso && <p className="mb-3 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">{aviso}</p>}
+      {aviso && <p className="alert alert-warn mb-3 text-xs">{aviso}</p>}
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">Carregando…</p>
+        <CarregandoLinhas linhas={4} className="px-0" />
       ) : error ? (
-        <p className="text-sm text-red-600">{error instanceof Error ? error.message : 'Falha ao carregar'}</p>
+        <ErroCarregar erro={error} />
       ) : !items?.length ? (
-        <p className="text-sm text-slate-400">Nenhuma classificação ainda — use “Adicionar classificações”.</p>
+        <Vazio titulo="Nenhuma classificação ainda" texto="Use “Adicionar classificações” para escolher da lista geral." className="py-6" />
       ) : (
         <ul className="divide-y divide-slate-100">
           {items.map((c) => (
-            <li key={c.id} className="flex items-center justify-between gap-2 py-2 text-sm">
+            <li key={c.id} className="group flex items-center justify-between gap-2 rounded-lg px-1 py-2 text-sm transition-colors hover:bg-brand-50/50">
               {editing === c.id ? (
                 <span className="flex flex-1 gap-1">
                   <input
@@ -178,9 +191,12 @@ function Catalogo({
                     value={draftNome}
                     autoFocus
                     onChange={(e) => setDraftNome(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && salvarNome(c)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') salvarNome(c);
+                      if (e.key === 'Escape') setEditing(null);
+                    }}
                   />
-                  <button className="btn-ghost h-8 px-2 text-xs" onClick={() => salvarNome(c)}>
+                  <button className="btn-primary btn-sm h-8" onClick={() => salvarNome(c)}>
                     ok
                   </button>
                 </span>
@@ -188,7 +204,7 @@ function Catalogo({
                 <span className={`flex-1 ${c.ativo ? 'text-slate-700' : 'text-slate-400 line-through'}`}>{c.nome}</span>
               ) : (
                 <button
-                  className={`flex-1 text-left hover:text-brand-600 hover:underline ${
+                  className={`flex-1 text-left hover:text-brand-700 hover:underline hover:underline-offset-4 ${
                     c.ativo ? 'text-slate-700' : 'text-slate-400 line-through'
                   }`}
                   title="Renomear"
@@ -201,13 +217,13 @@ function Catalogo({
                 </button>
               )}
               {!ehCliente && !c.geral_id && (
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500" title="Criada fora da lista geral">
+                <span className="chip chip-slate" title="Criada fora da lista geral">
                   avulsa
                 </span>
               )}
               {!c.ativo && (
                 <button
-                  className="text-xs text-slate-400 hover:text-slate-600"
+                  className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-700"
                   title="Volta a aparecer pra escolher"
                   onClick={() => updateMut.mutate({ id: c.id, input: { ativo: true } })}
                 >
@@ -216,7 +232,7 @@ function Catalogo({
               )}
               {c.ativo && !ehCliente && (
                 <button
-                  className="text-xs text-slate-400 hover:text-slate-600"
+                  className="text-xs font-medium text-slate-400 transition-colors hover:text-slate-700"
                   title="Desativar (não aparece mais pra escolher)"
                   onClick={() => updateMut.mutate({ id: c.id, input: { ativo: false } })}
                 >
@@ -224,7 +240,7 @@ function Catalogo({
                 </button>
               )}
               {c.ativo && (
-                <button className="text-xs text-slate-400 hover:text-red-600" onClick={() => setDeleting(c)}>
+                <button className="link-danger text-xs" onClick={() => setDeleting(c)}>
                   remover
                 </button>
               )}

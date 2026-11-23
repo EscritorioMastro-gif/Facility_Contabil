@@ -31,29 +31,29 @@ export function BulkBar({
   const [dir, setDir] = useState<Dir>('saida');
 
   return (
-    <div className="card space-y-3 p-4">
-      <p className="text-sm font-medium text-slate-700">Ações em massa</p>
+    <div className="card space-y-4 p-5">
+      <p className="card-title">Ações em massa</p>
 
       <div className="flex flex-wrap items-end gap-2 text-sm">
         <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Aplicar em</span>
-          <select className="input h-9 w-32" value={dir} onChange={(e) => setDir(e.target.value as Dir)}>
+          <span className="field-label">Aplicar em</span>
+          <select className="input h-9 w-40" value={dir} onChange={(e) => setDir(e.target.value as Dir)}>
             <option value="saida">todas as saídas</option>
             <option value="entrada">todas as entradas</option>
           </select>
         </label>
 
         <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Conta contábil</span>
+          <span className="field-label">Conta contábil</span>
           <div className="flex gap-1">
             <input
-              className="input h-9 w-36"
+              className="input input-mono h-9 w-32"
               value={conta}
               onChange={(e) => setConta(e.target.value)}
               placeholder="ex: 10004"
             />
             <button
-              className="btn-ghost h-9 px-3"
+              className="btn-ghost btn-sm h-9"
               disabled={!conta.trim()}
               onClick={() => onApplyConta(dir, conta.trim())}
             >
@@ -63,17 +63,17 @@ export function BulkBar({
         </label>
 
         <label className="flex flex-col">
-          <span className="mb-1 text-xs text-slate-500">Cód. histórico</span>
+          <span className="field-label">Cód. histórico</span>
           <div className="flex gap-1">
             <input
-              className="input h-9 w-24"
+              className="input input-mono h-9 w-20"
               value={hist}
               inputMode="numeric"
               onChange={(e) => setHist(e.target.value)}
               placeholder="138"
             />
             <button
-              className="btn-ghost h-9 px-3"
+              className="btn-ghost btn-sm h-9"
               disabled={!hist.trim()}
               onClick={() => onApplyHist(dir, hist.trim())}
             >
@@ -83,10 +83,10 @@ export function BulkBar({
         </label>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3 text-sm">
-        <span className="text-xs text-slate-500">Complemento no arquivo:</span>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 text-sm">
+        <span className="field-label mb-0">Complemento no arquivo</span>
         <select
-          className="input h-9 w-96"
+          className="input h-9 w-full sm:w-96"
           value={complementoModo}
           disabled={savingModo}
           onChange={(e) => onComplementoModo(e.target.value as ComplementoModo)}
@@ -100,22 +100,22 @@ export function BulkBar({
         {savingModo && <span className="text-xs text-slate-400">salvando…</span>}
       </div>
 
-      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3 text-sm">
-        <span className="self-center text-xs text-slate-500">Inativar:</span>
+      <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4 text-sm">
+        <span className="field-label mb-0 self-center">Inativar</span>
         <button
-          className="btn border border-red-200 bg-red-50 px-3 py-1.5 text-red-700 hover:bg-red-100"
+          className="btn-danger-soft btn-sm"
           onClick={() => onIgnore('saida')}
         >
           todas as saídas
         </button>
         <button
-          className="btn border border-red-200 bg-red-50 px-3 py-1.5 text-red-700 hover:bg-red-100"
+          className="btn-danger-soft btn-sm"
           onClick={() => onIgnore('entrada')}
         >
           todas as entradas
         </button>
         <button
-          className="btn border border-slate-300 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-100"
+          className="btn-ghost btn-sm"
           onClick={() => onIgnore('reativar')}
         >
           reativar todos

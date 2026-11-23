@@ -9,7 +9,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center text-slate-500">Carregando…</div>
+      <div className="flex h-screen flex-col items-center justify-center gap-4 text-sm text-slate-500" role="status">
+        <span className="grid h-11 w-11 animate-pulse-ring place-items-center rounded-2xl bg-gradient-to-br from-brand-300 via-brand-400 to-brand-600 font-display text-base font-bold text-brand-900 shadow-glow">
+          FC
+        </span>
+        Carregando…
+      </div>
     );
   }
 

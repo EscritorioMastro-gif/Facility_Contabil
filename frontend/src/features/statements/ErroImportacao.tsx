@@ -67,7 +67,7 @@ export function ErroImportacao({
         ? `/classificacao/revisao/${dup.statement_id}`
         : `/revisao/${dup.statement_id}`;
   return (
-    <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+    <div className="alert alert-error">
       <p>{msg}</p>
       {destino && (
         <Link to={destino} className="mt-1 inline-block font-medium underline">

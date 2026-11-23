@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconEmail, Spinner } from '@/components/icons';
+import { CarregandoLinhas, PageHeader } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import {
   useConvidarMembro,
@@ -61,55 +63,52 @@ export function EquipePage() {
   }
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Equipe do escritório</h1>
-        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
-          Todo mundo da equipe vê os mesmos clientes, extratos e classificações — cada pessoa com o
-          próprio login e a própria senha (criada pelo link do convite; o escritório não vê a senha).
-          O sistema guarda quem cadastrou cada cliente e cada extrato.
-        </p>
-      </div>
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Equipe do escritório"
+        descricao="Todo mundo da equipe vê os mesmos clientes, extratos e classificações — cada pessoa com o próprio login e a própria senha (criada pelo link do convite; o escritório não vê a senha). O sistema guarda quem cadastrou cada cliente e cada extrato."
+      />
 
       {isLoading ? (
-        <p className="text-sm text-slate-400">Carregando…</p>
+        <div className="card">
+          <CarregandoLinhas linhas={3} />
+        </div>
       ) : error ? (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{msgErro(error)}</p>
+        <p className="alert alert-error">{msgErro(error)}</p>
       ) : (
         <div className="card divide-y divide-slate-100">
           {data?.membros.map((m) => (
-            <div key={m.user_id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 text-sm">
-              <span className="font-medium text-slate-700">{m.email}</span>
-              {m.voce && <span className="text-xs text-slate-400">(você)</span>}
+            <div key={m.user_id} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-3.5 text-sm">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 font-display text-sm font-semibold text-white">
+                {m.email[0]?.toUpperCase()}
+              </span>
+              <span className="font-semibold text-slate-700">{m.email}</span>
+              {m.voce && <span className="chip chip-slate">você</span>}
               {m.principal && (
-                <span className="rounded bg-brand-100 px-1.5 py-0.5 text-[11px] font-medium text-brand-800">
+                <span className="chip chip-brand">
                   conta principal
                 </span>
               )}
               {m.admin && !m.principal && (
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                <span className="chip chip-slate">
                   administra
                 </span>
               )}
-              <span
-                className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                  m.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'
-                }`}
-              >
+              <span className={`chip chip-dot ${m.status === 'ativo' ? 'chip-green' : 'chip-amber'}`}>
                 {m.status === 'ativo' ? 'ativo' : 'convite pendente'}
               </span>
               {souAdmin && (
                 <span className="ml-auto flex gap-3 text-xs">
                   <button
                     type="button"
-                    className="text-brand-600 hover:underline disabled:opacity-50"
+                    className="link"
                     disabled={reenviar.isPending}
                     onClick={() => onReenviar(m)}
                   >
                     {m.status === 'ativo' ? 'enviar nova senha' : 'reenviar convite'}
                   </button>
                   {!m.voce && !m.principal && (
-                    <button type="button" className="text-slate-400 hover:text-red-600" onClick={() => setRemovendo(m)}>
+                    <button type="button" className="link-danger" onClick={() => setRemovendo(m)}>
                       tirar da equipe
                     </button>
                   )}
@@ -121,15 +120,22 @@ export function EquipePage() {
       )}
 
       {souAdmin ? (
-        <form onSubmit={onConvidar} className="flex flex-wrap gap-2">
-          <input
-            type="email"
-            className="input max-w-xs flex-1"
-            placeholder="e-mail da pessoa"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <form onSubmit={onConvidar} className="card flex flex-wrap items-end gap-3 p-5">
+          <div className="min-w-[16rem] flex-1">
+            <label className="label" htmlFor="convite-email">
+              Convidar alguém
+            </label>
+            <input
+              id="convite-email"
+              type="email"
+              className="input"
+              placeholder="e-mail da pessoa"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
           <button type="submit" className="btn-primary" disabled={!email.trim() || convidar.isPending}>
+            {convidar.isPending ? <Spinner /> : <IconEmail className="h-4 w-4" />}
             {convidar.isPending ? 'Enviando…' : 'Convidar para a equipe'}
           </button>
         </form>
@@ -142,9 +148,7 @@ export function EquipePage() {
 
       {aviso && (
         <p
-          className={`rounded-md px-3 py-2 text-sm ${
-            aviso.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
-          }`}
+          className={`alert ${aviso.ok ? 'alert-success' : 'alert-error'}`}
         >
           {aviso.texto}
         </p>

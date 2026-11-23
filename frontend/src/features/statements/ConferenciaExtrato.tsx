@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { formatDate } from '@/lib/format';
+import { Spinner } from '@/components/icons';
 import type { Liberavel, RespostasTravas, Trava } from './travas';
 
 /**
@@ -49,11 +50,11 @@ export function ConferenciaExtrato({
         : `/revisao/${e.id}`;
 
   return (
-    <div className="space-y-3 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-      <p className="font-semibold">Antes de importar, confira:</p>
+    <div className="alert alert-warn space-y-3" role="alert">
+      <p className="font-display font-semibold">Antes de importar, confira:</p>
 
       {travas.map((t) => (
-        <div key={t.tipo} className="space-y-2 border-t border-amber-200 pt-2 first-of-type:border-t-0 first-of-type:pt-0">
+        <div key={t.tipo} className="space-y-2 border-t border-amber-200/80 pt-3 first-of-type:border-t-0 first-of-type:pt-0">
           <p>{t.mensagem}</p>
 
           {t.tipo === 'outra_empresa' && t.empresa && onTrocarEmpresa && (
@@ -68,7 +69,7 @@ export function ConferenciaExtrato({
           )}
 
           {t.tipo === 'confirmar_empresa' && (
-            <label className="flex items-start gap-2 font-medium">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-white/60 px-3 py-2 font-semibold ring-1 ring-amber-200">
               <input
                 type="checkbox"
                 className="mt-0.5"
@@ -102,7 +103,7 @@ export function ConferenciaExtrato({
           )}
 
           {t.tipo !== 'confirmar_empresa' && t.pode_liberar && (
-            <label className="flex items-start gap-2">
+            <label className="flex cursor-pointer items-start gap-2 rounded-lg bg-white/60 px-3 py-2 ring-1 ring-amber-200">
               <input
                 type="checkbox"
                 className="mt-0.5"
@@ -124,6 +125,7 @@ export function ConferenciaExtrato({
           disabled={!pronto || enviando}
           onClick={() => onReenviar({ confirmo_empresa: confirmo, liberar: [...liberar] })}
         >
+          {enviando && <Spinner />}
           {enviando ? 'Enviando…' : 'Enviar de novo'}
         </button>
       ) : (

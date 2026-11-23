@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Modal } from '@/components/Modal';
+import { Spinner } from '@/components/icons';
 import { ApiError } from '@/lib/api';
 import type { Classificacao, Direction } from '@/lib/types';
 import { useCreateClassificacao } from './api';
@@ -64,12 +65,13 @@ export function NovaClassificacaoModal({
             placeholder="ex: ÁGUA E ESGOTO"
           />
         </div>
-        {err && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
-        <div className="flex justify-end gap-2">
+        {err && <p className="alert alert-error">{err}</p>}
+        <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={close}>
             Cancelar
           </button>
           <button type="submit" className="btn-primary" disabled={!nome.trim() || createMut.isPending}>
+            {createMut.isPending && <Spinner />}
             {createMut.isPending ? 'Criando…' : 'Criar'}
           </button>
         </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Paginacao, usePaginacao } from '@/components/Paginacao';
 import { TabelaRolavel } from '@/components/TabelaRolavel';
+import { Segmented } from '@/components/ui';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Direction, Transaction } from '@/lib/types';
 import { computeSaldo } from './saldo';
@@ -50,18 +51,33 @@ export function TransactionsTable({
   }, [transactions]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-2 text-sm">
-        <FilterBtn active={filter === 'todas'} onClick={() => setFilter('todas')}>
-          Todas ({transactions.length})
-        </FilterBtn>
-        <FilterBtn active={filter === 'entrada'} onClick={() => setFilter('entrada')}>
-          Entradas ({counts.entrada}) · {formatMoney(counts.somaE)}
-        </FilterBtn>
-        <FilterBtn active={filter === 'saida'} onClick={() => setFilter('saida')}>
-          Saídas ({counts.saida}) · {formatMoney(counts.somaS)}
-        </FilterBtn>
-      </div>
+    <div className="space-y-3">
+      <Segmented
+        label="Filtrar lançamentos"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: 'todas', label: 'Todas', count: transactions.length },
+          {
+            value: 'entrada',
+            label: (
+              <>
+                Entradas <span className="font-normal opacity-80">· {formatMoney(counts.somaE)}</span>
+              </>
+            ),
+            count: counts.entrada,
+          },
+          {
+            value: 'saida',
+            label: (
+              <>
+                Saídas <span className="font-normal opacity-80">· {formatMoney(counts.somaS)}</span>
+              </>
+            ),
+            count: counts.saida,
+          },
+        ]}
+      />
 
       <Paginacao
         pagina={pag.pagina}
@@ -74,7 +90,7 @@ export function TransactionsTable({
 
       <TabelaRolavel>
         <table className="w-full text-sm">
-          <thead className="text-left text-xs uppercase text-slate-500">
+          <thead className="text-left text-[11px] uppercase text-slate-500">
             <tr>
               <th className="px-3 py-2">Data</th>
               <th className="px-3 py-2">Histórico do extrato</th>
@@ -93,7 +109,7 @@ export function TransactionsTable({
                     {formatDate(t.data)}
                   </td>
                   <td className="px-3 py-1.5 text-slate-700">{t.descricao_raw}</td>
-                  <td className="whitespace-nowrap px-3 py-1.5 text-right tabular-nums">
+                  <td className={`whitespace-nowrap px-3 py-1.5 text-right font-medium tabular-nums ${t.direction === 'entrada' ? 'text-green-700' : 'text-slate-700'}`}>
                     {formatMoney(Math.round(Number(t.valor) * 100))}
                   </td>
                   <td className="px-3 py-1.5">
@@ -109,7 +125,7 @@ export function TransactionsTable({
                     </td>
                   )}
                   {!readOnly && (
-                    <td className="px-3 py-1.5 text-slate-400">{t.conta_contabil ?? '—'}</td>
+                    <td className="px-3 py-1.5 font-mono text-xs text-slate-500">{t.conta_contabil ?? '—'}</td>
                   )}
                 </tr>
               );
@@ -134,33 +150,10 @@ export function TransactionsTable({
   );
 }
 
-function FilterBtn({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded-md px-3 py-1.5 font-medium ${
-        active ? 'bg-brand-600 text-white' : 'border border-slate-300 bg-white text-slate-600'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 function DirBadge({ dir }: { dir: Direction }) {
   return dir === 'entrada' ? (
-    <span className="rounded bg-green-100 px-1.5 py-0.5 text-xs font-medium text-green-700">
-      entrada
-    </span>
+    <span className="chip chip-green">entrada</span>
   ) : (
-    <span className="rounded bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700">saída</span>
+    <span className="chip chip-red">saída</span>
   );
 }

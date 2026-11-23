@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
+import { IconCheck, IconCopiar, IconGrafico } from '@/components/icons';
+import { ErroCarregar, PageHeader, Vazio } from '@/components/ui';
 import { formatMoney, formatPct as pct } from '@/lib/format';
 import { useClients } from '@/features/clients/api';
 import { useDashboard, type Dashboard, type ItemDashboard, type MesDashboard } from './api';
@@ -60,19 +62,16 @@ export function DashboardPage() {
   );
 
   return (
-    <section className="space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Dashboard</h1>
-        <p className="text-sm text-slate-500">
-          Receitas e despesas por classificação, com o valor e o percentual de cada uma sobre o total. Entram só os
-          lançamentos classificados (os inativados ficam de fora).
-        </p>
-      </div>
+    <section className="space-y-6">
+      <PageHeader
+        titulo="Dashboard"
+        descricao="Receitas e despesas por classificação, com o valor e o percentual de cada uma sobre o total. Entram só os lançamentos classificados (os inativados ficam de fora)."
+      />
 
-      <div className="card space-y-3 p-4 text-sm">
+      <div className="card space-y-3 p-5 text-sm">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col">
-            <span className="mb-1 text-xs text-slate-500">Empresa</span>
+            <span className="field-label">Empresa</span>
             <select
               className="input h-9 min-w-[16rem]"
               value={clientId}
@@ -92,7 +91,7 @@ export function DashboardPage() {
             </select>
           </label>
           {!ehCliente && (
-            <label className="flex h-9 items-center gap-2 text-slate-600" title="Empresas liberadas para o mesmo login de cliente">
+            <label className="flex h-9 cursor-pointer items-center gap-2 rounded-xl px-2 text-slate-600 transition-colors hover:bg-brand-50" title="Empresas liberadas para o mesmo login de cliente">
               <input type="checkbox" checked={grupo} onChange={(e) => setGrupo(e.target.checked)} />
               Somar todas as empresas do mesmo cliente
             </label>
@@ -101,25 +100,36 @@ export function DashboardPage() {
         {/* De e Até sempre juntos, numa linha própria abaixo da empresa */}
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col">
-            <span className="mb-1 text-xs text-slate-500">De</span>
-            <input type="month" className="input h-9 w-40" value={de} onChange={(e) => setDe(e.target.value)} />
+            <span className="field-label">De</span>
+            <input type="month" className="input h-9 w-48 pr-2.5" value={de} onChange={(e) => setDe(e.target.value)} />
           </label>
           <label className="flex flex-col">
-            <span className="mb-1 text-xs text-slate-500">Até</span>
-            <input type="month" className="input h-9 w-40" value={ate} onChange={(e) => setAte(e.target.value)} />
+            <span className="field-label">Até</span>
+            <input type="month" className="input h-9 w-48 pr-2.5" value={ate} onChange={(e) => setAte(e.target.value)} />
           </label>
-          {!periodoOk && <span className="h-9 self-end text-xs text-red-600">O mês inicial tem que vir antes do final.</span>}
+          {!periodoOk && <span className="flex h-9 items-center self-end text-xs font-semibold text-red-600">O mês inicial tem que vir antes do final.</span>}
         </div>
       </div>
 
       {!pronto ? (
-        <p className="card p-6 text-sm text-slate-400">Escolha a empresa.</p>
+        <div className="card">
+          <Vazio
+            icone={<IconGrafico className="h-6 w-6" />}
+            titulo="Escolha a empresa"
+            texto="Os gráficos de receitas e despesas aparecem aqui."
+          />
+        </div>
       ) : isLoading ? (
-        <p className="text-sm text-slate-400">Carregando…</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="card space-y-2 p-5">
+              <div className="skeleton h-3 w-24" />
+              <div className="skeleton h-6 w-32" />
+            </div>
+          ))}
+        </div>
       ) : error || !data ? (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error instanceof Error ? error.message : 'Falha ao carregar o dashboard'}
-        </p>
+        <ErroCarregar erro={error} padrao="Falha ao carregar o dashboard" />
       ) : (
         <>
           {data.empresas.length > 1 && (
@@ -129,19 +139,20 @@ export function DashboardPage() {
           )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Numero rotulo="Receitas no período" valor={formatMoney(data.totais.receitas_cents)} />
-            <Numero rotulo="Despesas no período" valor={formatMoney(data.totais.despesas_cents)} />
+            <Numero rotulo="Receitas no período" valor={formatMoney(data.totais.receitas_cents)} cor={COR_RECEITA} />
+            <Numero rotulo="Despesas no período" valor={formatMoney(data.totais.despesas_cents)} cor={COR_DESPESA} />
             <Numero
               rotulo="Resultado"
               valor={formatMoney(data.totais.resultado_cents)}
-              tom={data.totais.resultado_cents < 0 ? 'text-red-700' : undefined}
+              tom={data.totais.resultado_cents < 0 ? 'text-red-700' : 'text-brand-800'}
+              destaque
             />
             <Numero
               rotulo="Sem classificação"
               valor={`${data.pendentes.qtd} lançamento(s)`}
               detalhe={
                 data.pendentes.qtd ? (
-                  <Link to="/classificacao/historico" className="text-brand-600 hover:underline">
+                  <Link to="/classificacao/historico" className="link">
                     {formatMoney(data.pendentes.total_cents)} · classificar
                   </Link>
                 ) : null
@@ -156,20 +167,39 @@ export function DashboardPage() {
   );
 }
 
-function Numero({ rotulo, valor, detalhe, tom }: { rotulo: string; valor: string; detalhe?: React.ReactNode; tom?: string }) {
+function Numero({
+  rotulo,
+  valor,
+  detalhe,
+  tom,
+  cor,
+  destaque,
+}: {
+  rotulo: string;
+  valor: string;
+  detalhe?: React.ReactNode;
+  tom?: string;
+  /** cor da legenda (mesma do gráfico por mês) */
+  cor?: string;
+  destaque?: boolean;
+}) {
   return (
-    <div className="card px-4 py-3">
-      <p className="text-xs text-slate-500">{rotulo}</p>
-      <p className={`text-lg font-semibold tabular-nums ${tom ?? 'text-slate-800'}`}>{valor}</p>
-      {detalhe && <p className="text-xs">{detalhe}</p>}
+    <div className={`card relative overflow-hidden px-5 py-4 ${destaque ? 'ring-1 ring-brand-300/60' : ''}`}>
+      {destaque && <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-300/25 blur-2xl" />}
+      <p className="relative flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+        {cor && <span className="h-2 w-2 rounded-sm" style={{ background: cor }} />}
+        {rotulo}
+      </p>
+      <p className={`relative mt-1 font-display text-xl font-semibold tabular-nums ${tom ?? 'text-slate-800'}`}>{valor}</p>
+      {detalhe && <p className="relative mt-0.5 text-xs">{detalhe}</p>}
     </div>
   );
 }
 
 function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-medium text-slate-500">{titulo}</h2>
+    <div className="space-y-3">
+      <h2 className="eyebrow">{titulo}</h2>
       {/* grid-cols-1 = minmax(0, 1fr): a tabela larga rola dentro do cartão, não estica a página no celular */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">{children}</div>
     </div>
@@ -229,9 +259,9 @@ function Tabela({ titulo, itens, total }: { titulo: string; itens: ItemDashboard
   }
 
   return (
-    <div className="card space-y-4 p-4">
+    <div className="card space-y-4 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-slate-700">{titulo}</p>
+        <p className="card-title">{titulo}</p>
         <p className="text-sm tabular-nums text-slate-500">Total {formatMoney(total)}</p>
       </div>
 
@@ -270,7 +300,8 @@ function Tabela({ titulo, itens, total }: { titulo: string; itens: ItemDashboard
             </table>
           </div>
           <div className="flex justify-end">
-            <button type="button" className="btn-ghost h-8 px-3 text-xs" onClick={copiar}>
+            <button type="button" className={`btn-sm ${copiado ? 'btn-primary' : 'btn-ghost'}`} onClick={copiar}>
+              {copiado ? <IconCheck className="h-3.5 w-3.5" /> : <IconCopiar className="h-3.5 w-3.5" />}
               {copiado ? 'Copiado — cole no Excel' : 'Copiar tabela para o Excel'}
             </button>
           </div>
@@ -287,9 +318,9 @@ function PorMes({ meses }: { meses: MesDashboard[] }) {
   );
   if (!meses.length) return null;
   return (
-    <div className="card space-y-3 p-4">
+    <div className="card space-y-4 p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm font-medium text-slate-700">Receitas x despesas por mês</p>
+        <p className="card-title">Receitas x despesas por mês</p>
         <div className="flex gap-4 text-xs text-slate-600">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ background: COR_RECEITA }} />
@@ -314,7 +345,7 @@ function PorMes({ meses }: { meses: MesDashboard[] }) {
                 ).map(([nome, v, cor]) => (
                   <span
                     key={nome}
-                    className="w-5 rounded-t"
+                    className="w-5 rounded-t-md transition-opacity hover:opacity-80"
                     style={{ height: `${(v / maior) * 100}%`, minHeight: v ? 2 : 0, background: cor }}
                     title={`${rotuloMes(m.mes)} — ${nome}: ${formatMoney(v)}`}
                   />

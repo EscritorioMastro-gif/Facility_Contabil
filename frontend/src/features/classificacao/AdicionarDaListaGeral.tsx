@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Modal } from '@/components/Modal';
+import { IconMais, Spinner } from '@/components/icons';
+import { Carregando } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/useAuth';
 import type { Classificacao, Direction } from '@/lib/types';
@@ -19,7 +21,7 @@ export function AdicionarDaListaGeral({
   clientId,
   direction,
   naLista,
-  className = 'btn-ghost h-9 px-3',
+  className = 'btn-ghost btn-sm h-9',
 }: {
   clientId: string;
   direction: Direction;
@@ -31,7 +33,8 @@ export function AdicionarDaListaGeral({
   return (
     <>
       <button type="button" className={className} onClick={() => setAberto(true)} disabled={!clientId}>
-        + Adicionar classificações de {ROTULO[direction]}
+        <IconMais className="h-4 w-4" />
+        Adicionar classificações de {ROTULO[direction]}
       </button>
       {aberto && (
         <JanelaListaGeral clientId={clientId} direction={direction} naLista={naLista} onClose={() => setAberto(false)} />
@@ -92,11 +95,11 @@ function JanelaListaGeral({
         </p>
 
         {isLoading ? (
-          <p className="text-slate-400">Carregando a lista geral…</p>
+          <Carregando texto="Carregando a lista geral…" />
         ) : error ? (
           <p className="text-red-600">{error instanceof Error ? error.message : 'Falha ao carregar'}</p>
         ) : !gerais.length ? (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-amber-800">
+          <p className="alert alert-warn">
             A lista geral de {ROTULO[direction]} ainda está vazia.{' '}
             {ehCliente ? (
               'Peça ao escritório para incluir as classificações.'
@@ -115,6 +118,7 @@ function JanelaListaGeral({
             <div className="flex items-center gap-2">
               <input
                 className="input h-9"
+                type="search"
                 placeholder="Procurar na lista geral…"
                 value={busca}
                 autoFocus
@@ -129,13 +133,15 @@ function JanelaListaGeral({
                 Marcar todas
               </button>
             </div>
-            <ul className="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-brand-200">
+            <ul className="max-h-[50vh] divide-y divide-slate-100 overflow-y-auto rounded-xl border border-brand-200">
               {mostrados.map((g) => {
                 const ja = ativos.has(normal(g.nome));
                 return (
                   <li key={g.id}>
                     <label
-                      className={`flex items-center gap-2 px-3 py-2 ${ja ? 'text-slate-400' : 'cursor-pointer hover:bg-brand-50'}`}
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 transition-colors ${
+                        ja ? 'text-slate-400' : marcados.has(g.id) ? 'cursor-pointer bg-brand-50/80 font-semibold text-brand-900' : 'cursor-pointer hover:bg-brand-50/60'
+                      }`}
                     >
                       <input
                         type="checkbox"
@@ -144,7 +150,7 @@ function JanelaListaGeral({
                         onChange={() => alternar(g.id)}
                       />
                       <span className="flex-1">{g.nome}</span>
-                      {ja && <span className="text-xs">já está na {daLista}</span>}
+                      {ja && <span className="chip chip-slate">já está na {daLista}</span>}
                     </label>
                   </li>
                 );
@@ -154,12 +160,13 @@ function JanelaListaGeral({
           </>
         )}
 
-        {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
+        {erro && <p className="alert alert-error">{erro}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
             Cancelar
           </button>
           <button type="button" className="btn-primary" disabled={!marcados.size || adicionar.isPending} onClick={confirmar}>
+            {adicionar.isPending && <Spinner />}
             {adicionar.isPending ? 'Adicionando…' : `Adicionar${marcados.size ? ` (${marcados.size})` : ''}`}
           </button>
         </div>

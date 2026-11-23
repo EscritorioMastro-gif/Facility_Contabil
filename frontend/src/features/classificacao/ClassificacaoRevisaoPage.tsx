@@ -3,6 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Paginacao, usePaginacao } from '@/components/Paginacao';
 import { TabelaRolavel } from '@/components/TabelaRolavel';
+import { IconCheck, IconSalvar, IconSetaDireita, IconSetaEsquerda, Spinner } from '@/components/icons';
+import { BarraAcoes, BarraProgresso, Carregando, ErroCarregar, Etapas, Kbd, Metrica, PageHeader, Segmented, Vazio } from '@/components/ui';
+import { ETAPAS_CLASSIFICACAO } from '@/lib/etapas';
+import { useToast } from '@/lib/toast';
+import { useAtalhoSalvar } from '@/lib/useAtalhoSalvar';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/auth/useAuth';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -40,6 +45,7 @@ export function ClassificacaoRevisaoPage() {
   // linhas iguais preenchidas junto com a que o operador classificou (pra poder desfazer)
   const [iguais, setIguais] = useState<{ n: number; nome: string; antes: Map<string, string | null> } | null>(null);
   const { ehCliente, user } = useAuth();
+  const toast = useToast();
 
   const clientId = data?.statement.client_id ?? '';
   const transactions = useMemo(() => data?.transactions ?? [], [data]);
@@ -98,6 +104,15 @@ export function ClassificacaoRevisaoPage() {
 
   const pag = usePaginacao(shown, 'classificacao', filter);
 
+  // Ctrl+S: o escritório salva; o cliente salva pelo "Salvar e aprovar"
+  useAtalhoSalvar(() => {
+    if (ehCliente) {
+      if (isDirty) toast({ tipo: 'info', texto: 'Para salvar, use “Salvar e aprovar”', detalhe: 'Ele salva e registra que você conferiu o que já está classificado.' });
+      return;
+    }
+    onSave();
+  });
+
   // Enter desce pro lançamento de baixo (Shift+Enter sobe), passando de página
   const selects = useRef<Array<HTMLSelectElement | null>>([]);
   const focarDepois = useRef<number | 'ultima' | null>(null);
@@ -124,13 +139,8 @@ export function ClassificacaoRevisaoPage() {
     }
   }
 
-  if (isLoading) return <p className="text-sm text-slate-400">Carregando…</p>;
-  if (error || !data)
-    return (
-      <p className="text-sm text-red-600">
-        {error instanceof Error ? error.message : 'Importação não encontrada'}
-      </p>
-    );
+  if (isLoading) return <Carregando texto="Carregando o extrato…" className="py-10" />;
+  if (error || !data) return <ErroCarregar erro={error} padrao="Importação não encontrada" />;
 
   const st = data.statement;
   const jaPuxado = st.status !== 'classificacao';
@@ -151,9 +161,12 @@ export function ClassificacaoRevisaoPage() {
   const ocupado = save.isPending || aprovar.isPending;
 
   function onSave() {
-    if (!isDirty) return;
+    if (!isDirty || save.isPending) return;
     setIguais(null);
-    save.mutate(changes);
+    const n = changes.length;
+    save.mutate(changes, {
+      onSuccess: () => toast({ texto: 'Classificações salvas', detalhe: `${n} lançamento(s) atualizado(s) — a memória já aprendeu.` }),
+    });
   }
 
   function abrirAprovacao() {
@@ -168,6 +181,7 @@ export function ClassificacaoRevisaoPage() {
       if (isDirty) await save.mutateAsync(changes);
       await aprovar.mutateAsync();
       setAprovando(false);
+      toast({ texto: 'Classificações aprovadas', detalhe: 'O escritório já vê a sua aprovação no histórico.' });
     } catch {
       // o erro aparece na janela (save.error / aprovar.error)
     }
@@ -186,6 +200,7 @@ export function ClassificacaoRevisaoPage() {
     <button
       className="btn-primary"
       onClick={abrirAprovacao}
+      aria-label="Salvar e aprovar"
       disabled={!podeAbrirAprovacao || ocupado}
       title={
         stats.classificados === 0
@@ -199,12 +214,13 @@ export function ClassificacaoRevisaoPage() {
               : 'Salvar e declarar que conferiu as classificações'
       }
     >
+      {ocupado ? <Spinner /> : <IconCheck className="h-4 w-4" />}
       {ocupado
         ? 'Salvando…'
         : !temNovidade && situacao === 'aprovado'
-          ? 'Aprovado ✓'
+          ? 'Aprovado'
           : !temNovidade && situacao === 'parcial'
-            ? 'Parte aprovada ✓'
+            ? 'Parte aprovada'
             : isDirty
               ? `Salvar e aprovar (${changes.length})`
               : 'Salvar e aprovar'}
@@ -268,40 +284,36 @@ export function ClassificacaoRevisaoPage() {
   const saveErr =
     save.error instanceof ApiError ? save.error.message : save.error ? String(save.error) : null;
 
+  const voltar = () => (isDirty ? setConfirmSair(true) : navigate('/classificacao/historico'));
+  const etapa = jaPuxado ? 3 : stats.pend === 0 && stats.ativos > 0 ? 2 : 1;
+
   return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Classificação</h1>
-          <p className="text-sm text-slate-500">
-            {st.client?.razao_social ?? 'cliente'} · {st.arquivo_nome} ·{' '}
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Classificar lançamentos"
+        descricao={
+          <>
+            <span className="font-semibold text-slate-700">{st.client?.razao_social ?? 'cliente'}</span> · {st.arquivo_nome} ·{' '}
             {st.period_start && st.period_end
               ? `${formatDate(st.period_start)} a ${formatDate(st.period_end)}`
               : 'sem período'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="btn-ghost"
-            onClick={() => (isDirty ? setConfirmSair(true) : navigate('/classificacao/historico'))}
-          >
+          </>
+        }
+        acoes={
+          <button className="btn-ghost" onClick={voltar}>
+            <IconSetaEsquerda className="h-4 w-4" />
             Voltar
           </button>
-          {/* cliente salva pelo "Salvar e aprovar" */}
-          {!ehCliente && (
-            <button className="btn-primary" onClick={onSave} disabled={!isDirty || save.isPending}>
-              {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
-            </button>
-          )}
-          {botaoAprovar}
-        </div>
-      </div>
+        }
+      >
+        <Etapas etapas={ETAPAS_CLASSIFICACAO} atual={etapa} />
+      </PageHeader>
 
       <AvisoAprovacao st={st} ehCliente={ehCliente} />
       <HistoricoAprovacoes st={st} ehCliente={ehCliente} />
 
       {jaPuxado && (
-        <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
+        <p className="alert alert-info">
           {somenteLeitura ? (
             'Este extrato já foi enviado para a contabilidade — as classificações ficam só para consulta.'
           ) : (
@@ -313,26 +325,29 @@ export function ClassificacaoRevisaoPage() {
         </p>
       )}
 
-      {st.erro_msg && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{st.erro_msg}</p>
-      )}
-      {saveErr && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{saveErr}</p>}
+      {st.erro_msg && <p className="alert alert-error">{st.erro_msg}</p>}
+      {saveErr && <p className="alert alert-error">{saveErr}</p>}
 
       <StatementSummary statement={st} resumido={ehCliente} />
 
-      <div className="card grid grid-cols-2 gap-x-6 gap-y-1 p-3 text-sm sm:grid-cols-4">
-        <Stat label="Ativos" value={String(stats.ativos)} />
-        <Stat label="Classificados" value={String(stats.classificados)} tone="green" />
-        <Stat label="Pendentes" value={String(stats.pend)} tone={stats.pend ? 'amber' : undefined} />
-        <Stat
-          label="Sugestões p/ conferir"
-          value={String(stats.sugestoes.length)}
-          tone={stats.sugestoes.length ? 'amber' : undefined}
-        />
+      {/* progresso */}
+      <div className="card p-5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-4">
+          <Metrica rotulo="Ativos" valor={stats.ativos} tom="brand" />
+          <Metrica rotulo="Classificados" valor={stats.classificados} tom="green" />
+          <Metrica rotulo="Pendentes" valor={stats.pend} tom={stats.pend ? 'amber' : undefined} />
+          <Metrica rotulo="Sugestões p/ conferir" valor={stats.sugestoes.length} tom={stats.sugestoes.length ? 'amber' : undefined} />
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <BarraProgresso feito={stats.classificados} total={stats.ativos} rotulo="Lançamentos classificados" />
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">
+            {stats.ativos ? Math.round((stats.classificados / stats.ativos) * 100) : 0}% classificado
+          </span>
+        </div>
       </div>
 
       {(stats.daMemoria > 0 || stats.sugestoes.length > 0) && (
-        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+        <p className={`alert ${stats.sugestoes.length > 0 ? 'alert-warn' : 'alert-success'}`}>
           {stats.daMemoria > 0 && (
             <>
               {stats.daMemoria} lançamento(s) classificado(s) pela memória (a mesma descrição já foi classificada
@@ -340,7 +355,7 @@ export function ClassificacaoRevisaoPage() {
             </>
           )}
           {stats.sugestoes.length > 0 && (
-            <span className="text-amber-800">
+            <span>
               {stats.sugestoes.length} com sugestão para conferir: a descrição já teve classificações diferentes
               (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente.
             </span>
@@ -349,30 +364,32 @@ export function ClassificacaoRevisaoPage() {
       )}
 
       {!somenteLeitura && (
-        <div className="card space-y-3 p-4 text-sm">
-          <p className="text-sm font-medium text-slate-700">Ações em massa</p>
+        <div className="card space-y-4 p-5 text-sm">
+          <p className="card-title">Ações em massa</p>
           <div className="flex flex-wrap gap-2">
             <AdicionarDaListaGeral clientId={clientId} direction="entrada" naLista={lista} />
             <AdicionarDaListaGeral clientId={clientId} direction="saida" naLista={lista} />
             <button
-              className="btn-ghost h-9 px-3"
+              className="btn-ghost btn-sm h-9"
               disabled={!stats.pend || memoria.buscando}
               title="Classifica os pendentes cuja descrição já foi classificada antes nesta empresa"
               onClick={preencherPelaMemoria}
             >
+              {memoria.buscando && <Spinner />}
               {memoria.buscando ? 'Lendo a memória…' : 'Preencher pela memória'}
             </button>
             {stats.sugestoes.length > 0 && (
-              <button className="btn-ghost h-9 px-3" onClick={() => aceitar(stats.sugestoes)}>
+              <button className="btn-ghost btn-sm h-9" onClick={() => aceitar(stats.sugestoes)}>
+                <IconCheck className="h-4 w-4 text-green-600" />
                 Aceitar as sugestões ({stats.sugestoes.length})
               </button>
             )}
           </div>
           {memoria.msg && <p className="text-xs text-slate-600">{memoria.msg}</p>}
 
-          <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+          <div className="flex flex-wrap items-end gap-2 border-t border-slate-100 pt-4">
             <label className="flex flex-col">
-              <span className="mb-1 text-xs text-slate-500">Classificar em</span>
+              <span className="field-label">Classificar em</span>
               <select
                 className="input h-9 w-44"
                 value={bulkDir}
@@ -386,18 +403,18 @@ export function ClassificacaoRevisaoPage() {
               </select>
             </label>
             <label className="flex flex-col">
-              <span className="mb-1 text-xs text-slate-500">Classificação</span>
+              <span className="field-label">Classificação</span>
               <ClassificacaoSelect
                 clientId={clientId}
                 direction={bulkDir}
                 options={catalogo[bulkDir]}
                 value={bulkClassif || null}
                 onChange={(v) => setBulkClassif(v ?? '')}
-                className="input h-9 w-56"
+                className="input h-9 w-60"
               />
             </label>
             <button
-              className="btn-ghost h-9 px-3"
+              className="btn-ghost btn-sm h-9"
               disabled={!bulkClassif}
               onClick={() => patchMany((tx) => tx.direction === bulkDir && !tx.ignorado, bulkClassif || null)}
             >
@@ -407,51 +424,53 @@ export function ClassificacaoRevisaoPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-1 text-sm">
-        {(
-          [
-            ['saida', 'Saídas'],
-            ['entrada', 'Entradas'],
-            ['pendentes', `Pendentes (${stats.pend})`],
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <Segmented
+          label="Filtrar lançamentos"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'saida', label: 'Saídas' },
+            { value: 'entrada', label: 'Entradas' },
+            { value: 'pendentes', label: 'Pendentes', count: stats.pend },
             ...(stats.sugestoes.length || filter === 'sugestoes'
-              ? [['sugestoes', `Sugestões (${stats.sugestoes.length})`] as [Filter, string]]
+              ? [{ value: 'sugestoes' as Filter, label: 'Sugestões', count: stats.sugestoes.length }]
               : []),
-            ['todas', 'Todas'],
-          ] as [Filter, string][]
-        ).map(([f, label]) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-md px-3 py-1.5 font-medium ${
-              filter === f ? 'bg-brand-600 text-white' : 'border border-slate-300 bg-white text-slate-600'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+            { value: 'todas', label: 'Todas', count: stats.ativos },
+          ]}
+        />
+        {!somenteLeitura && shown.length > 0 && (
+          <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+            Digite as primeiras letras para escolher · <Kbd>Enter</Kbd> próximo · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd> anterior
+            {!ehCliente && (
+              <>
+                {' '}
+                · <Kbd>Ctrl</Kbd>+<Kbd>S</Kbd> salva
+              </>
+            )}
+          </p>
+        )}
       </div>
 
       {!somenteLeitura && shown.length > 0 && (
         <p className="text-xs text-slate-500">
-          Dica: no campo da classificação, digite as primeiras letras para escolher e aperte <b>Enter</b> para ir ao
-          lançamento de baixo (<b>Shift+Enter</b> volta). Os lançamentos com a mesma descrição neste extrato são
-          classificados junto.
+          Os lançamentos com a mesma descrição neste extrato são classificados junto.
         </p>
       )}
 
       {iguais && (
-        <p className="flex flex-wrap items-center gap-2 rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
+        <div className="alert alert-info flex flex-wrap items-center gap-x-3 gap-y-1" role="status">
           <span>
-            Também classifiquei {iguais.n} lançamento(s) com a mesma descrição
+            Também classifiquei <b>{iguais.n}</b> lançamento(s) com a mesma descrição
             {iguais.nome ? ` como "${iguais.nome}"` : ''}.
           </span>
-          <button type="button" className="font-medium underline" onClick={desfazerIguais}>
+          <button type="button" className="font-bold underline underline-offset-4" onClick={desfazerIguais}>
             desfazer
           </button>
           <button type="button" className="ml-auto text-xs text-brand-700/70 hover:text-brand-800" onClick={() => setIguais(null)}>
             fechar
           </button>
-        </p>
+        </div>
       )}
 
       <Paginacao
@@ -467,33 +486,34 @@ export function ClassificacaoRevisaoPage() {
         <table className="w-full text-sm">
           <thead className="text-left text-[10px] uppercase text-slate-500">
             <tr>
-              <th className="px-2 py-2">Data</th>
-              <th className="px-2 py-2">Histórico do extrato</th>
-              <th className="px-2 py-2 text-right">Valor</th>
-              <th className="px-2 py-2">Tipo</th>
-              <th className="px-2 py-2">Classificação</th>
+              <th className="px-3 py-2">Data</th>
+              <th className="px-3 py-2">Histórico do extrato</th>
+              <th className="px-3 py-2 text-right">Valor</th>
+              <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Classificação</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {pag.daPagina.map((txn: Transaction, i) => {
               const origem = origemDe(txn);
+              const vazio = !get(txn.id);
               return (
                 <tr key={txn.id} className={origem === 'conferir' ? 'bg-amber-50/60' : ''}>
-                  <td className="whitespace-nowrap px-2 py-1 text-xs">{formatDate(txn.data)}</td>
-                  <td className="px-2 py-1 text-xs text-slate-700">{txn.descricao_raw}</td>
-                  <td className="whitespace-nowrap px-2 py-1 text-right text-xs tabular-nums">
+                  <td className="whitespace-nowrap px-3 py-1.5 text-xs text-slate-600">{formatDate(txn.data)}</td>
+                  <td className="min-w-[14rem] px-3 py-1.5 text-xs text-slate-700">{txn.descricao_raw}</td>
+                  <td
+                    className={`whitespace-nowrap px-3 py-1.5 text-right text-xs font-medium tabular-nums ${
+                      txn.direction === 'entrada' ? 'text-green-700' : 'text-slate-700'
+                    }`}
+                  >
                     {formatMoney(Math.round(Number(txn.valor) * 100))}
                   </td>
-                  <td className="px-2 py-1">
-                    <span
-                      className={`rounded px-1 py-0.5 text-[10px] font-medium ${
-                        txn.direction === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}
-                    >
+                  <td className="px-3 py-1.5">
+                    <span className={`chip ${txn.direction === 'entrada' ? 'chip-green' : 'chip-red'}`}>
                       {txn.direction === 'entrada' ? 'ent' : 'saí'}
                     </span>
                   </td>
-                  <td className="px-1 py-1">
+                  <td className="px-2 py-1.5">
                     <div className="flex items-center gap-1.5">
                       <ClassificacaoSelect
                         ref={(el) => {
@@ -507,7 +527,9 @@ export function ClassificacaoRevisaoPage() {
                         onChange={(v) => classificar(txn, v)}
                         onKeyDown={(e) => navegar(e, i)}
                         disabled={somenteLeitura}
-                        className="input h-8 w-56 px-2 py-1 text-xs disabled:bg-slate-100"
+                        className={`input h-8 w-60 rounded-lg px-2 py-1 text-xs disabled:bg-slate-100 ${
+                          vazio && !somenteLeitura ? 'border-amber-300 bg-amber-50/40 text-slate-500' : ''
+                        }`}
                       />
                       <SeloMemoria
                         origem={origem}
@@ -521,9 +543,7 @@ export function ClassificacaoRevisaoPage() {
             })}
           </tbody>
         </table>
-        {shown.length === 0 && (
-          <p className="p-6 text-sm text-slate-400">Nenhum lançamento neste filtro.</p>
-        )}
+        {shown.length === 0 && <Vazio titulo="Nenhum lançamento neste filtro" texto="Troque o filtro acima para ver os outros lançamentos." />}
       </TabelaRolavel>
 
       <Paginacao
@@ -535,44 +555,59 @@ export function ClassificacaoRevisaoPage() {
         onPorPagina={pag.setPorPagina}
       />
 
-      <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-sm">
-        <span className="text-slate-500">
-          {isDirty
-            ? ehCliente
-              ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Salvar e aprovar" para salvar.`
-              : 'Salve as alterações antes de ir pra Importação.'
-            : stats.pend > 0
-              ? `${stats.pend} lançamento(s) ainda sem classificação.`
-              : ehCliente && temNovidade
+      <BarraAcoes
+        status={
+          isDirty ? (
+            <span className="flex items-center gap-2 font-semibold text-amber-700">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+              {ehCliente
+                ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Salvar e aprovar" para salvar.`
+                : `${changes.length} alteração(ões) não salva(s) — salve antes de ir pra Importação.`}
+            </span>
+          ) : stats.pend > 0 ? (
+            `${stats.pend} lançamento(s) ainda sem classificação.`
+          ) : (
+            <span className="flex items-center gap-2 font-semibold text-green-700">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              {ehCliente && temNovidade
                 ? `Tudo classificado (${stats.classificados}/${stats.ativos}) — falta aprovar.`
                 : `Tudo classificado (${stats.classificados}/${stats.ativos}).`}
-        </span>
-        <div className="flex gap-2">
-          {isDirty && (
-            <button
-              className="btn-ghost"
-              onClick={() => {
-                reset();
-                setIguais(null);
-              }}
-            >
-              Descartar alterações
-            </button>
-          )}
-          {botaoAprovar}
-          {/* puxar pra Importação é do escritório */}
-          {!ehCliente && (
-            <button
-              className="btn-primary"
-              disabled={isDirty}
-              title={isDirty ? 'Salve as alterações primeiro' : 'Ir definir as contas contábeis'}
-              onClick={() => navigate(`/importar?puxar=${st.id}`)}
-            >
-              {jaPuxado ? 'Ir para Importação →' : 'Puxar para Importação →'}
-            </button>
-          )}
-        </div>
-      </div>
+            </span>
+          )
+        }
+      >
+        {isDirty && (
+          <button
+            className="btn-quiet"
+            onClick={() => {
+              reset();
+              setIguais(null);
+            }}
+          >
+            Descartar
+          </button>
+        )}
+        {/* cliente salva pelo "Salvar e aprovar" */}
+        {!ehCliente && (
+          <button className={isDirty ? 'btn-primary' : 'btn-ghost'} onClick={onSave} disabled={!isDirty || save.isPending} title="Salvar (Ctrl+S)">
+            {save.isPending ? <Spinner /> : <IconSalvar className="h-4 w-4" />}
+            {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
+          </button>
+        )}
+        {botaoAprovar}
+        {/* puxar pra Importação é do escritório */}
+        {!ehCliente && (
+          <button
+            className={isDirty ? 'btn-ghost' : 'btn-primary'}
+            disabled={isDirty}
+            title={isDirty ? 'Salve as alterações primeiro' : 'Ir definir as contas contábeis'}
+            onClick={() => navigate(`/importar?puxar=${st.id}`)}
+          >
+            {jaPuxado ? 'Ir para Importação' : 'Puxar para Importação'}
+            <IconSetaDireita className="h-4 w-4" />
+          </button>
+        )}
+      </BarraAcoes>
 
       <ModalAprovacao
         open={aprovando}
@@ -603,7 +638,7 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
   if (origem === 'memoria') {
     return (
       <span
-        className="whitespace-nowrap rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700"
+        className="chip chip-green"
         title="Classificado pela memória: essa descrição já foi classificada assim antes"
       >
         memória
@@ -614,7 +649,7 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
     return (
       <span className="flex items-center gap-1 whitespace-nowrap">
         <span
-          className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+          className="chip chip-amber"
           title="Sugestão para conferir: essa descrição já teve classificações diferentes (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente"
         >
           sugestão
@@ -622,11 +657,12 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
         {onAceitar && (
           <button
             type="button"
-            className="rounded border border-amber-300 px-1.5 text-[11px] text-amber-800 hover:bg-amber-100"
+            className="grid h-6 w-6 place-items-center rounded-lg border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-100"
             title="Está certa — aceitar a sugestão"
+            aria-label="Aceitar a sugestão"
             onClick={onAceitar}
           >
-            ✓
+            <IconCheck className="h-3.5 w-3.5" strokeWidth={2.5} />
           </button>
         )}
       </span>
@@ -641,7 +677,7 @@ function SeloAprovado({ aprovado, atual }: { aprovado: string | null; atual: str
   if (aprovado === atual) {
     return (
       <span
-        className="whitespace-nowrap rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700"
+        className="chip chip-green"
         title="O cliente aprovou esta classificação"
       >
         ✓ aprovado
@@ -650,25 +686,10 @@ function SeloAprovado({ aprovado, atual }: { aprovado: string | null; atual: str
   }
   return (
     <span
-      className="whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+      className="chip chip-amber"
       title="A classificação mudou depois que o cliente aprovou — precisa de nova aprovação"
     >
       mudou após aprovação
     </span>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'green' | 'amber' }) {
-  return (
-    <div>
-      <p className="text-[10px] uppercase text-slate-400">{label}</p>
-      <p
-        className={`font-semibold ${
-          tone === 'green' ? 'text-green-700' : tone === 'amber' ? 'text-amber-700' : 'text-slate-800'
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }

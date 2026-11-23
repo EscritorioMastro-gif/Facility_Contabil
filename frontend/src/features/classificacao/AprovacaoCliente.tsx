@@ -1,4 +1,5 @@
 import { Modal } from '@/components/Modal';
+import { IconChevronDireita, IconEscudo, Spinner } from '@/components/icons';
 import { formatMoney } from '@/lib/format';
 import type { Statement } from '@/lib/types';
 import { useAprovacoes } from './api';
@@ -17,8 +18,7 @@ export function AvisoAprovacao({ st, ehCliente }: { st: Statement; ehCliente: bo
 
   if (situacao === 'aprovado') {
     return (
-      <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800" role="status">
-        ✓{' '}
+      <p className="alert alert-success" role="status">
         {ehCliente ? (
           <>
             Você aprovou as classificações deste extrato em <b>{dataHora(st.aprovado_em!)}</b> ({quem}).
@@ -35,7 +35,7 @@ export function AvisoAprovacao({ st, ehCliente }: { st: Statement; ehCliente: bo
 
   if (situacao === 'parcial') {
     return (
-      <p className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900" role="status">
+      <p className="alert alert-sky" role="status">
         {ehCliente ? (
           <>
             Você aprovou <b>{parteAprovada(st)} lançamentos</b> em {dataHora(st.aprovado_em!)}. Continue
@@ -53,7 +53,7 @@ export function AvisoAprovacao({ st, ehCliente }: { st: Statement; ehCliente: bo
 
   if (situacao === 'alterado') {
     return (
-      <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900" role="status">
+      <p className="alert alert-warn" role="status">
         Aprovado por {quem} em {dataHora(st.aprovado_em!)}, mas{' '}
         <b>lançamentos já aprovados tiveram a classificação alterada</b> (em{' '}
         {dataHora(st.classificacao_alterada_em!)}).{' '}
@@ -62,9 +62,14 @@ export function AvisoAprovacao({ st, ehCliente }: { st: Statement; ehCliente: bo
     );
   }
 
-  if (!ehCliente) return <p className="text-xs text-slate-500">Ainda sem aprovação do cliente.</p>;
+  if (!ehCliente)
+    return (
+      <p className="flex items-center gap-2 text-xs font-medium text-slate-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-slate-300" /> Ainda sem aprovação do cliente.
+      </p>
+    );
   return (
-    <p className="rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
+    <p className="alert alert-info">
       Classifique e confira os lançamentos e clique em <b>Salvar e aprovar</b>: ele salva e registra que você
       conferiu o que já está classificado. Dá pra aprovar em partes, ao longo do mês.
     </p>
@@ -110,9 +115,14 @@ export function ModalAprovacao({
       open={open}
       onClose={fechar}
       title={parcial ? 'Salvar e aprovar o que já foi classificado' : 'Salvar e aprovar as classificações do mês'}
+      icone={
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-brand-50 text-brand-700 ring-1 ring-brand-200">
+          <IconEscudo className="h-5 w-5" />
+        </span>
+      }
     >
       <div className="space-y-3 text-sm text-slate-700">
-        <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50/80 to-white px-4 py-3 leading-relaxed">
           Declaro que <b>conferi as classificações {parcial ? 'dos' : 'de todos os'} {plural(qtd, 'lançamento', 'lançamentos')}{' '}
           {parcial ? 'já classificados' : ''}</b> deste extrato
           {st.client?.razao_social ? ` de ${st.client.razao_social}` : ''} ({periodo}) e as aprovo.
@@ -123,7 +133,7 @@ export function ModalAprovacao({
           </p>
         )}
         {parcial && (
-          <p className="rounded-md bg-sky-50 px-3 py-2 text-sky-900">
+          <p className="alert alert-sky">
             Ainda {pendentes === 1 ? 'falta 1 lançamento' : `faltam ${pendentes} lançamentos`} sem classificação.{' '}
             {pendentes === 1 ? 'Ele fica' : 'Eles ficam'} para a próxima aprovação — dá pra continuar depois.
           </p>
@@ -132,13 +142,14 @@ export function ModalAprovacao({
           As suas classificações são salvas e fica registrado o seu login{email ? ` (${email})` : ''}, a data, a hora
           e o IP. Se um lançamento que você aprovou for alterado depois, o extrato volta a aguardar a sua aprovação.
         </p>
-        {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-red-700">{erro}</p>}
+        {erro && <p className="alert alert-error">{erro}</p>}
       </div>
-      <div className="mt-5 flex flex-wrap justify-end gap-2">
+      <div className="mt-6 flex flex-wrap justify-end gap-2">
         <button className="btn-ghost" onClick={onCancelar} disabled={busy}>
           Cancelar
         </button>
         <button className="btn-primary" onClick={onAprovar} disabled={busy || qtd === 0}>
+          {busy ? <Spinner /> : <IconEscudo className="h-4 w-4" />}
           {busy ? 'Salvando…' : 'Conferi, salvar e aprovar'}
         </button>
       </div>
@@ -156,8 +167,9 @@ export function HistoricoAprovacoes({ st, ehCliente }: { st: Statement; ehClient
   if (!st.aprovado_em) return null;
 
   return (
-    <details className="card p-3 text-sm" open={!ehCliente}>
-      <summary className="cursor-pointer font-medium text-slate-700">
+    <details className="card group px-5 py-3.5 text-sm" open={!ehCliente}>
+      <summary className="card-title flex list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
+        <IconChevronDireita className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90" />
         {ehCliente ? 'Suas aprovações' : 'Aprovações do cliente'}
         {aprovacoes ? ` (${aprovacoes.length})` : ''}
       </summary>
@@ -168,7 +180,7 @@ export function HistoricoAprovacoes({ st, ehCliente }: { st: Statement; ehClient
         </p>
       )}
       {aprovacoes && aprovacoes.length > 0 && (
-        <div className="mt-2 overflow-x-auto">
+        <div className="mt-3 overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="text-left text-[10px] uppercase text-slate-500">
               <tr>

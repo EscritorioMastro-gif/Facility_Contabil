@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { IconChevronDireita, IconChevronEsquerda, IconChevronsDireita, IconChevronsEsquerda } from './icons';
 
 /** Itens por página que a pessoa escolhe (pedido do user: 10, 50 e 100). */
 export const TAMANHOS_PAGINA = [10, 50, 100] as const;
@@ -86,14 +87,17 @@ export function Paginacao({
   const ate = Math.min(pagina * porPagina, total);
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
-      <span>
-        {de.toLocaleString('pt-BR')}–{ate.toLocaleString('pt-BR')} de {total.toLocaleString('pt-BR')} {rotulo}
+      <span className="text-[13px]">
+        <b className="font-semibold tabular-nums text-slate-800">
+          {de.toLocaleString('pt-BR')}–{ate.toLocaleString('pt-BR')}
+        </b>{' '}
+        de <span className="tabular-nums">{total.toLocaleString('pt-BR')}</span> {rotulo}
       </span>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-1.5">
-          <span className="text-xs text-slate-500">Itens por página</span>
+        <label className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">Por página</span>
           <select
-            className="rounded-md border border-brand-200 bg-white px-2 py-1 text-sm"
+            className="input h-8 w-[4.75rem] rounded-lg py-0 pl-2.5 text-[13px]"
             value={porPagina}
             onChange={(e) => onPorPagina(Number(e.target.value))}
           >
@@ -105,21 +109,21 @@ export function Paginacao({
           </select>
         </label>
         {paginas > 1 && (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" role="group" aria-label="Páginas">
             <BotaoPagina onClick={() => onPagina(1)} disabled={pagina <= 1} titulo="Primeira página">
-              «
+              <IconChevronsEsquerda className="h-4 w-4" />
             </BotaoPagina>
             <BotaoPagina onClick={() => onPagina(pagina - 1)} disabled={pagina <= 1} titulo="Página anterior">
-              ‹ Anterior
+              <IconChevronEsquerda className="h-4 w-4" />
             </BotaoPagina>
-            <span className="px-2 text-xs text-slate-500">
-              Página {pagina} de {paginas}
+            <span className="min-w-[5.5rem] px-1.5 text-center text-xs font-medium text-slate-500">
+              Página <b className="font-semibold text-slate-800">{pagina}</b> de {paginas}
             </span>
             <BotaoPagina onClick={() => onPagina(pagina + 1)} disabled={pagina >= paginas} titulo="Próxima página">
-              Próxima ›
+              <IconChevronDireita className="h-4 w-4" />
             </BotaoPagina>
             <BotaoPagina onClick={() => onPagina(paginas)} disabled={pagina >= paginas} titulo="Última página">
-              »
+              <IconChevronsDireita className="h-4 w-4" />
             </BotaoPagina>
           </div>
         )}
@@ -143,9 +147,10 @@ function BotaoPagina({
     <button
       type="button"
       title={titulo}
+      aria-label={titulo}
       onClick={onClick}
       disabled={disabled}
-      className="rounded-md border border-brand-200 bg-white px-2.5 py-1 text-sm text-slate-700 hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-40"
+      className="grid h-8 w-8 place-items-center rounded-lg border border-brand-200 bg-white text-slate-600 shadow-sm transition-colors hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
     >
       {children}
     </button>

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconHistorico, IconLixeira, IconMais, IconSetaDireita, IconX } from '@/components/icons';
+import { CarregandoLinhas, ErroCarregar, PageHeader, Segmented, Vazio } from '@/components/ui';
 import { Paginacao, useItensPorPagina } from '@/components/Paginacao';
 import { ApiError } from '@/lib/api';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -11,10 +13,10 @@ import { BaixarDominio } from '@/features/statements/BaixarDominio';
 import { ReimportarExtrato } from '@/features/statements/ReimportarExtrato';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
-  parsing: { text: 'lendo', cls: 'bg-slate-100 text-slate-600' },
-  revisao: { text: 'em revisão', cls: 'bg-amber-100 text-amber-800' },
-  gerado: { text: 'arquivo gerado', cls: 'bg-green-100 text-green-700' },
-  erro: { text: 'erro', cls: 'bg-red-100 text-red-700' },
+  parsing: { text: 'lendo', cls: 'chip-slate' },
+  revisao: { text: 'em revisão', cls: 'chip-amber' },
+  gerado: { text: 'arquivo gerado', cls: 'chip-green' },
+  erro: { text: 'erro', cls: 'chip-red' },
 };
 
 export function HistoricoPage() {
@@ -72,16 +74,20 @@ export function HistoricoPage() {
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-800">Histórico de importações</h1>
-        <Link to="/importar" className="btn-primary">
-          + Nova importação
-        </Link>
-      </div>
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Histórico de importações"
+        descricao="Extratos lidos, em revisão e com arquivo do Domínio gerado — abra, baixe de novo ou troque o arquivo."
+        acoes={
+          <Link to="/importar" className="btn-primary">
+            <IconMais className="h-4 w-4" />
+            Nova importação
+          </Link>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <select className="input max-w-xs" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+      <div className="flex flex-wrap items-center gap-3">
+        <select className="input max-w-xs" aria-label="Filtrar por cliente" value={clientId} onChange={(e) => setClientId(e.target.value)}>
           <option value="">Todos os clientes</option>
           {clients?.map((c) => (
             <option key={c.id} value={c.id}>
@@ -89,38 +95,46 @@ export function HistoricoPage() {
             </option>
           ))}
         </select>
-        <select
-          className="input max-w-[10rem]"
-          value={status}
-          onChange={(e) => setStatus(e.target.value as StatementStatus | '')}
-        >
-          <option value="">Todos os status</option>
-          <option value="revisao">Em revisão</option>
-          <option value="gerado">Arquivo gerado</option>
-          <option value="erro">Erro</option>
-          <option value="parsing">Lendo</option>
-        </select>
+        <Segmented
+          label="Filtrar por status"
+          value={status || 'todos'}
+          onChange={(v) => setStatus(v === 'todos' ? '' : v)}
+          options={[
+            { value: 'todos', label: 'Todos' },
+            { value: 'revisao', label: 'Em revisão' },
+            { value: 'gerado', label: 'Arquivo gerado' },
+            { value: 'erro', label: 'Erro' },
+            { value: 'parsing', label: 'Lendo' },
+          ]}
+        />
         {(clientId || status) && (
           <button
-            className="text-sm text-slate-400 hover:text-slate-600"
+            className="btn-quiet btn-sm"
             onClick={() => {
               setClientId('');
               setStatus('');
             }}
           >
+            <IconX className="h-3.5 w-3.5" />
             limpar filtros
           </button>
         )}
       </div>
 
       {selecionadosNaLista.length > 0 && (
-        <div className="flex items-center justify-between rounded-md bg-brand-50 px-3 py-2 text-sm text-brand-800">
-          <span>{selecionadosNaLista.length} selecionado(s)</span>
-          <div className="flex gap-3">
-            <button className="hover:underline" onClick={() => setSelected(new Set())}>
+        <div className="flex animate-fade-up flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-800 px-4 py-2.5 text-sm text-white shadow-float">
+          <span className="flex items-center gap-2 font-semibold">
+            <span className="grid h-6 min-w-[1.5rem] place-items-center rounded-full bg-brand-300 px-1.5 text-xs font-bold text-brand-900">
+              {selecionadosNaLista.length}
+            </span>
+            selecionado(s)
+          </span>
+          <div className="flex gap-2">
+            <button className="rounded-lg px-3 py-1.5 font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white" onClick={() => setSelected(new Set())}>
               limpar seleção
             </button>
-            <button className="font-medium text-red-700 hover:underline" onClick={() => setConfirmBulk(true)}>
+            <button className="btn-danger btn-sm" onClick={() => setConfirmBulk(true)}>
+              <IconLixeira className="h-3.5 w-3.5" />
               excluir selecionados
             </button>
           </div>
@@ -139,21 +153,28 @@ export function HistoricoPage() {
 
       <div className="card overflow-x-auto">
         {isLoading ? (
-          <p className="p-6 text-sm text-slate-400">Carregando…</p>
+          <CarregandoLinhas />
         ) : error ? (
-          <p className="p-6 text-sm text-red-600">
-            {error instanceof Error ? error.message : 'Falha ao carregar'}
-          </p>
+          <ErroCarregar erro={error} className="m-5" />
         ) : !shown.length ? (
-          <p className="p-6 text-sm text-slate-400">
-            {clientId || status ? 'Nenhuma importação com esse filtro.' : 'Nenhuma importação ainda.'}
-          </p>
+          <Vazio
+            icone={<IconHistorico className="h-6 w-6" />}
+            titulo={clientId || status ? 'Nenhuma importação com esse filtro' : 'Nenhuma importação ainda'}
+            acao={
+              !clientId &&
+              !status && (
+                <Link to="/importar" className="btn-primary">
+                  Fazer a primeira importação
+                </Link>
+              )
+            }
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] uppercase text-slate-500">
               <tr>
                 <th className="w-8 px-4 py-2">
-                  <input type="checkbox" checked={todosSelecionados} onChange={toggleAll} />
+                  <input type="checkbox" checked={todosSelecionados} onChange={toggleAll} aria-label="Selecionar todas" />
                 </th>
                 <th className="px-4 py-2">Cliente</th>
                 <th className="px-4 py-2">Arquivo</th>
@@ -166,15 +187,16 @@ export function HistoricoPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {shown.map((s: Statement) => {
-                const st = STATUS_LABEL[s.status] ?? { text: s.status, cls: 'bg-slate-100 text-slate-600' };
+                const st = STATUS_LABEL[s.status] ?? { text: s.status, cls: 'chip-slate' };
                 const totais = 'qtd' in s.totais ? s.totais : null;
                 return (
-                  <tr key={s.id} className={selected.has(s.id) ? 'bg-brand-50/40' : ''}>
+                  <tr key={s.id} className={selected.has(s.id) ? 'bg-brand-50/60' : ''}>
                     <td className="px-4 py-2">
                       <input
                         type="checkbox"
                         checked={selected.has(s.id)}
                         onChange={() => toggleUm(s.id)}
+                        aria-label={`Selecionar ${s.arquivo_nome}`}
                       />
                     </td>
                     <td className="px-4 py-2 font-medium text-slate-800">
@@ -182,7 +204,7 @@ export function HistoricoPage() {
                     </td>
                     <td className="px-4 py-2 text-slate-600">
                       {s.arquivo_nome}
-                      <span className="ml-1 text-xs text-slate-400">
+                      <span className="ml-1.5 font-mono text-[10px] font-semibold text-slate-400">
                         {s.formato.toUpperCase()}
                       </span>
                     </td>
@@ -196,14 +218,13 @@ export function HistoricoPage() {
                       {s.saldo_final != null ? formatMoney(Math.round(Number(s.saldo_final) * 100)) : '—'}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${st.cls}`}>
-                        {st.text}
-                      </span>
+                      <span className={`chip chip-dot ${st.cls}`}>{st.text}</span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {s.status !== 'parsing' && (
-                        <Link to={`/revisao/${s.id}`} className="text-brand-600 hover:underline">
+                        <Link to={`/revisao/${s.id}`} className="link">
                           abrir
+                          <IconSetaDireita className="h-3.5 w-3.5" />
                         </Link>
                       )}
                       {s.status === 'gerado' && (
@@ -223,10 +244,12 @@ export function HistoricoPage() {
                         </>
                       )}
                       <button
-                        className="ml-3 text-slate-400 hover:text-red-600"
+                        className="link-danger ml-4 align-middle"
                         onClick={() => setDeleting(s)}
+                        title="Excluir importação"
+                        aria-label={`Excluir ${s.arquivo_nome}`}
                       >
-                        excluir
+                        <IconLixeira className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>

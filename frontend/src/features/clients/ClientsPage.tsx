@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { BackendStatus } from '@/components/BackendStatus';
+import { IconBusca, IconChevronDireita, IconEmpresa, IconLixeira, IconMais, IconX } from '@/components/icons';
+import { Carregando, CarregandoLinhas, ErroCarregar, PageHeader, Segmented, Vazio } from '@/components/ui';
+import { useToast } from '@/lib/toast';
 import { ApiError } from '@/lib/api';
 import { formatCnpjCpf } from '@/lib/format';
 import type { Client, ClientInput } from '@/lib/types';
@@ -31,12 +34,16 @@ export function ClientsPage() {
   const updateMut = useUpdateClient();
   const deleteMut = useDeleteClient();
   const liberarMut = useLiberarAcesso();
+  const toast = useToast();
 
   function handleCreate(input: ClientInput, emailAcesso: string) {
     createMut.mutate(input, {
       onSuccess: ({ client }) => {
         setCreating(false);
-        if (!emailAcesso) return;
+        if (!emailAcesso) {
+          toast({ texto: 'Cliente cadastrado', detalhe: input.razao_social });
+          return;
+        }
         // cliente já está salvo; o convite é um passo à parte (se falhar, dá pra repetir na edição)
         setAviso(null);
         liberarMut.mutate(
@@ -65,68 +72,97 @@ export function ClientsPage() {
   }
   function handleUpdate(input: ClientInput) {
     if (!editing) return;
-    updateMut.mutate({ id: editing.id, input }, { onSuccess: () => setEditing(null) });
+    updateMut.mutate(
+      { id: editing.id, input },
+      {
+        onSuccess: () => {
+          setEditing(null);
+          toast({ texto: 'Cliente atualizado', detalhe: input.razao_social });
+        },
+      },
+    );
   }
   function confirmDelete() {
     if (!deleting) return;
-    deleteMut.mutate(deleting.id, { onSuccess: () => setDeleting(null) });
+    const nome = deleting.razao_social;
+    deleteMut.mutate(deleting.id, {
+      onSuccess: () => {
+        setDeleting(null);
+        toast({ texto: 'Cliente excluído', detalhe: nome });
+      },
+    });
   }
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-800">Clientes</h1>
-        <button className="btn-primary" onClick={() => setCreating(true)}>
-          + Novo cliente
-        </button>
-      </div>
-
-      {liberarMut.isPending && (
-        <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">Enviando o convite de acesso…</p>
-      )}
-      {aviso && (
-        <p
-          className={`flex items-start justify-between gap-3 rounded-md px-3 py-2 text-sm ${
-            aviso.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
-          }`}
-        >
-          <span>{aviso.texto}</span>
-          <button className="text-xs opacity-60 hover:opacity-100" onClick={() => setAviso(null)} aria-label="Fechar aviso">
-            ✕
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Clientes"
+        descricao="Código no Domínio, conta contábil do banco, históricos padrão e saldo inicial de cada cliente — tudo que a importação preenche sozinha."
+        acoes={
+          <button className="btn-primary" onClick={() => setCreating(true)}>
+            <IconMais className="h-4 w-4" />
+            Novo cliente
           </button>
-        </p>
+        }
+      />
+
+      {liberarMut.isPending && <Carregando texto="Enviando o convite de acesso…" />}
+      {aviso && (
+        <div className={`alert flex items-start justify-between gap-3 ${aviso.ok ? 'alert-success' : 'alert-error'}`}>
+          <span>{aviso.texto}</span>
+          <button className="shrink-0 rounded-md p-0.5 opacity-60 hover:opacity-100" onClick={() => setAviso(null)} aria-label="Fechar aviso">
+            <IconX className="h-4 w-4" />
+          </button>
+        </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="input max-w-xs"
-          placeholder="Buscar por razão social ou CNPJ…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-sm">
+          <IconBusca className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            className="input pl-10"
+            type="search"
+            aria-label="Buscar cliente"
+            placeholder="Buscar por razão social ou CNPJ…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Segmented
+          label="Situação do cliente"
+          value={ativo ?? 'all'}
+          onChange={(v) => setAtivo(v)}
+          options={[
+            { value: 'all', label: 'Todos' },
+            { value: 'true', label: 'Ativos' },
+            { value: 'false', label: 'Inativos' },
+          ]}
         />
-        <select
-          className="input max-w-[10rem]"
-          value={ativo}
-          onChange={(e) => setAtivo(e.target.value as ClientsFilter['ativo'])}
-        >
-          <option value="all">Todos</option>
-          <option value="true">Ativos</option>
-          <option value="false">Inativos</option>
-        </select>
+        {clients && <span className="ml-auto text-xs font-medium text-slate-500">{clients.length} cliente(s)</span>}
       </div>
 
       <div className="card overflow-x-auto">
         {isLoading ? (
-          <p className="p-6 text-sm text-slate-400">Carregando…</p>
+          <CarregandoLinhas />
         ) : error ? (
-          <p className="p-6 text-sm text-red-600">
-            {error instanceof Error ? error.message : 'Falha ao carregar'}
-          </p>
+          <ErroCarregar erro={error} className="m-5" />
         ) : !clients?.length ? (
-          <p className="p-6 text-sm text-slate-400">Nenhum cliente. Cadastre o primeiro.</p>
+          <Vazio
+            icone={<IconEmpresa className="h-6 w-6" />}
+            titulo={search || ativo !== 'all' ? 'Nenhum cliente com esse filtro' : 'Nenhum cliente ainda'}
+            texto={search || ativo !== 'all' ? 'Troque a busca ou o filtro.' : 'Cadastre o primeiro cliente para começar a importar extratos.'}
+            acao={
+              !search && ativo === 'all' && (
+                <button className="btn-primary" onClick={() => setCreating(true)}>
+                  <IconMais className="h-4 w-4" />
+                  Novo cliente
+                </button>
+              )
+            }
+          />
         ) : (
           <table className="w-full text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs uppercase text-slate-500">
+            <thead className="border-b border-slate-200 bg-slate-50/80 text-left text-[11px] uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-2">Razão social</th>
                 <th className="px-4 py-2">CNPJ / CPF</th>
@@ -138,29 +174,39 @@ export function ClientsPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {clients.map((c) => (
-                <tr key={c.id} className={c.ativo ? '' : 'opacity-50'}>
-                  <td className="px-4 py-2 font-medium text-slate-800">
-                    {c.razao_social}
-                    {!c.ativo && <span className="ml-2 text-xs text-slate-400">(inativo)</span>}
+                <tr key={c.id} className={c.ativo ? '' : 'opacity-60'}>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 font-display text-xs font-bold text-brand-700 ring-1 ring-brand-200">
+                        {iniciais(c.razao_social)}
+                      </span>
+                      <div className="min-w-0">
+                        <button className="block truncate text-left font-semibold text-slate-800 hover:text-brand-700" onClick={() => setEditing(c)}>
+                          {c.razao_social}
+                        </button>
+                        {!c.ativo && <span className="chip chip-slate mt-0.5">inativo</span>}
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-4 py-2 text-slate-600">{formatCnpjCpf(c.cnpj)}</td>
-                  <td className="px-4 py-2 text-slate-600">{c.dominio_code}</td>
-                  <td className="px-4 py-2 text-slate-600">{c.banco_conta_contabil ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-600">
+                  <td className="whitespace-nowrap px-4 py-2.5 font-mono text-xs text-slate-600">{formatCnpjCpf(c.cnpj)}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-700">{c.dominio_code}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-700">
+                    {c.banco_conta_contabil ?? <span className="chip chip-amber font-sans">sem conta</span>}
+                  </td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-slate-600">
                     {c.hist_code_entrada} / {c.hist_code_saida}
                   </td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap">
-                    <button
-                      className="text-brand-600 hover:underline"
-                      onClick={() => setEditing(c)}
-                    >
+                  <td className="whitespace-nowrap px-4 py-2.5 text-right">
+                    <button className="btn-ghost btn-sm" onClick={() => setEditing(c)}>
                       Editar
                     </button>
                     <button
-                      className="ml-3 text-slate-400 hover:text-red-600"
+                      className="link-danger ml-3 align-middle"
                       onClick={() => setDeleting(c)}
+                      title="Excluir cliente"
+                      aria-label={`Excluir ${c.razao_social}`}
                     >
-                      Excluir
+                      <IconLixeira className="h-4 w-4" />
                     </button>
                   </td>
                 </tr>
@@ -218,12 +264,24 @@ export function ClientsPage() {
         }}
       />
 
-      <details className="text-sm text-slate-500">
-        <summary className="cursor-pointer">Status dos serviços</summary>
-        <div className="mt-2 max-w-sm">
+      <details className="group text-sm text-slate-500">
+        <summary className="inline-flex items-center gap-1.5 font-medium hover:text-slate-700">
+          <IconChevronDireita className="h-4 w-4 transition-transform group-open:rotate-90" />
+          Status dos serviços
+        </summary>
+        <div className="mt-3 max-w-sm">
           <BackendStatus />
         </div>
       </details>
     </section>
   );
+}
+
+/** "Padaria Pão Dourado LTDA" → "PP" (selo da linha). */
+function iniciais(nome: string): string {
+  const partes = nome
+    .replace(/\b(LTDA|ME|EPP|S\.?A\.?|EIRELI)\b/gi, '')
+    .split(/\s+/)
+    .filter((p) => p.length > 2);
+  return ((partes[0]?.[0] ?? nome[0] ?? '?') + (partes[1]?.[0] ?? '')).toUpperCase();
 }

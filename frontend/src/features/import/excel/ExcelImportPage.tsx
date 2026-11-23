@@ -6,6 +6,9 @@ import { travasDoErro, type RespostasTravas } from '@/features/statements/travas
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Planilha } from '@/lib/types';
 import { FileDrop } from '@/components/FileDrop';
+import { IconRaio, IconSetaDireita, IconSetaEsquerda, Spinner } from '@/components/icons';
+import { Ajuda, Carregando, Etapas, PageHeader, PassoAjuda, Secao } from '@/components/ui';
+import { ETAPAS_EXCEL } from '@/lib/etapas';
 import { useCreateStatementExcel, useLerPlanilha, type ImportResult } from '@/features/statements/api';
 import { useCabecalhoImportacao } from '../useCabecalhoImportacao';
 import { CamposCabecalho, NotaContaBanco } from '../CamposCabecalho';
@@ -143,6 +146,7 @@ export function ExcelImportPage() {
         saldoInicial={cab.saldoInicialNum}
         onSaldoInicial={(v) => cab.setSaldoInicial(v.toFixed(2).replace('.', ','))}
         onNova={recomecar}
+        etapas={ETAPAS_EXCEL}
       />
     );
   }
@@ -157,30 +161,36 @@ export function ExcelImportPage() {
     const erro = mensagem(createMut.error) ?? mensagem(lerMut.error);
 
     return (
-      <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-800">Escolha as colunas</h1>
-            <p className="text-sm text-slate-500">
-              {cab.selected?.razao_social ?? 'cliente'} · {lida.file.name}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button className="btn-ghost" onClick={() => setEtapa('dados')} disabled={createMut.isPending}>
-              ← Voltar
-            </button>
-            <button className="btn-primary" onClick={() => importar()} disabled={!podeImportar}>
-              {createMut.isPending
-                ? 'Importando…'
-                : `Importar ${resumo.lancamentos} lançamento${resumo.lancamentos === 1 ? '' : 's'}`}
-            </button>
-          </div>
-        </div>
+      <section className="space-y-5">
+        <PageHeader
+          titulo="Escolha as colunas"
+          descricao={
+            <>
+              <span className="font-semibold text-slate-700">{cab.selected?.razao_social ?? 'cliente'}</span> · {lida.file.name}
+            </>
+          }
+          acoes={
+            <>
+              <button className="btn-ghost" onClick={() => setEtapa('dados')} disabled={createMut.isPending}>
+                <IconSetaEsquerda className="h-4 w-4" />
+                Voltar
+              </button>
+              <button className="btn-primary" onClick={() => importar()} disabled={!podeImportar}>
+                {createMut.isPending ? <Spinner /> : <IconRaio className="h-4 w-4" />}
+                {createMut.isPending
+                  ? 'Importando…'
+                  : `Importar ${resumo.lancamentos} lançamento${resumo.lancamentos === 1 ? '' : 's'}`}
+              </button>
+            </>
+          }
+        >
+          <Etapas etapas={ETAPAS_EXCEL} atual={1} />
+        </PageHeader>
 
-        <div className="card space-y-2 p-4 text-sm text-slate-600">
+        <div className="card space-y-2 p-5 text-sm text-slate-600">
           {planilha.abas.length > 1 && (
             <div className="flex flex-wrap items-center gap-2 pb-1">
-              <label className="font-medium text-slate-700" htmlFor="aba-planilha">
+              <label className="font-semibold text-slate-700" htmlFor="aba-planilha">
                 Aba da planilha
               </label>
               <select
@@ -197,7 +207,7 @@ export function ExcelImportPage() {
                   </option>
                 ))}
               </select>
-              {lerMut.isPending && <span className="text-slate-400">Lendo a aba…</span>}
+              {lerMut.isPending && <Carregando texto="Lendo a aba…" />}
             </div>
           )}
           <p>
@@ -207,20 +217,20 @@ export function ExcelImportPage() {
             sozinhas.
           </p>
           {origemColunas === 'anterior' && (
-            <p className="text-green-800">
+            <p className="alert alert-success">
               Colunas da última importação Excel deste cliente — confira se a planilha continua do
               mesmo jeito.
             </p>
           )}
           {origemColunas === 'cabecalho' && (
-            <p className="text-green-800">Colunas sugeridas pelo cabeçalho da planilha — confira.</p>
+            <p className="alert alert-success">Colunas sugeridas pelo cabeçalho da planilha — confira.</p>
           )}
         </div>
 
         <ResumoPlanilha resumo={resumo} falta={falta} />
 
         {planilha.truncado && (
-          <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="alert alert-warn">
             A aba tem {planilha.total_linhas.toLocaleString('pt-BR')} linhas preenchidas — a prévia
             mostra só as primeiras {planilha.linhas.length.toLocaleString('pt-BR')}. O limite é
             10.000 lançamentos por importação.
@@ -229,7 +239,7 @@ export function ExcelImportPage() {
         {duplicado(createMut.error) || travasDoErro(createMut.error) ? (
           <ErroImportacao err={createMut.error} enviando={createMut.isPending} onReenviar={(r) => importar(r)} />
         ) : (
-          erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>
+          erro && <p className="alert alert-error">{erro}</p>
         )}
 
         <MapeamentoPlanilha
@@ -246,45 +256,66 @@ export function ExcelImportPage() {
 
   const erro = mensagem(lerMut.error);
   return (
-    <section className="max-w-2xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-800">Nova importação Excel</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Para a planilha de controle do próprio cliente. Na próxima tela você diz qual coluna é a
-          data, o valor e o histórico. Extrato de banco (PDF, OFX, CSV) continua na{' '}
-          <Link to="/importar" className="text-brand-600 hover:underline">
-            Nova importação
-          </Link>
-          .
-        </p>
+    <section className="space-y-6">
+      <PageHeader
+        titulo="Nova importação Excel"
+        descricao={
+          <>
+            Para a planilha de controle do próprio cliente. Na próxima tela você diz qual coluna é a data, o valor e o
+            histórico. Extrato de banco (PDF, OFX, CSV) continua na{' '}
+            <Link to="/importar" className="link">
+              Nova importação
+            </Link>
+            .
+          </>
+        }
+      >
+        <Etapas etapas={ETAPAS_EXCEL} atual={0} />
+      </PageHeader>
+
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <form onSubmit={escolherColunas} className="card animate-fade-up space-y-7 p-6 sm:p-7">
+          <Secao numero={1} titulo="Cliente e parâmetros do Domínio">
+            <CamposCabecalho cab={cab} />
+          </Secao>
+
+          <div className="divider" />
+
+          <Secao numero={2} titulo="Planilha">
+            <FileDrop
+              file={file}
+              onFile={setFile}
+              accept=".xls,.xlsx,.xlsm"
+              titulo="Arraste a planilha aqui ou clique para escolher"
+              formatos="XLS ou XLSX"
+            />
+          </Secao>
+
+          {erro && <p className="alert alert-error">{erro}</p>}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="btn-primary sm:min-w-[12rem]"
+              disabled={!cab.completo || !file || lerMut.isPending}
+            >
+              {lerMut.isPending && <Spinner />}
+              {lerMut.isPending ? 'Lendo a planilha…' : 'Escolher as colunas'}
+              {!lerMut.isPending && <IconSetaDireita className="h-4 w-4" />}
+            </button>
+          </div>
+        </form>
+
+        <Ajuda>
+          <PassoAjuda n={1}>Escolha o cliente e arraste a planilha de controle dele (XLS ou XLSX).</PassoAjuda>
+          <PassoAjuda n={2}>
+            Diga qual coluna é a <b>data</b>, o <b>valor</b> e o <b>histórico</b>. Valor negativo vira saída; positivo vira
+            entrada.
+          </PassoAjuda>
+          <PassoAjuda n={3}>A escolha de colunas volta pronta na próxima planilha do mesmo cliente.</PassoAjuda>
+          <NotaContaBanco cab={cab} />
+        </Ajuda>
       </div>
-
-      <form onSubmit={escolherColunas} className="card space-y-4 p-6">
-        <CamposCabecalho cab={cab} />
-
-        <div>
-          <label className="label">Planilha</label>
-          <FileDrop
-            file={file}
-            onFile={setFile}
-            accept=".xls,.xlsx,.xlsm"
-            titulo="Arraste a planilha aqui ou clique para escolher"
-            formatos="XLS ou XLSX"
-          />
-        </div>
-
-        {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
-
-        <button
-          type="submit"
-          className="btn-primary w-full"
-          disabled={!cab.completo || !file || lerMut.isPending}
-        >
-          {lerMut.isPending ? 'Lendo a planilha…' : 'Escolher as colunas →'}
-        </button>
-      </form>
-
-      <NotaContaBanco cab={cab} />
     </section>
   );
 }
@@ -292,7 +323,7 @@ export function ExcelImportPage() {
 function ResumoPlanilha({ resumo, falta }: { resumo: Resumo; falta: string[] }) {
   if (falta.length) {
     return (
-      <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      <p className="alert alert-warn">
         Falta escolher a coluna de {falta.join(', ').replace(/, ([^,]*)$/, ' e $1')}.
       </p>
     );
@@ -307,7 +338,7 @@ function ResumoPlanilha({ resumo, falta }: { resumo: Resumo; falta: string[] }) 
   ].filter(Boolean);
 
   return (
-    <div className="card grid grid-cols-2 gap-x-8 gap-y-2 p-4 text-sm sm:grid-cols-4">
+    <div className="card grid grid-cols-2 gap-x-8 gap-y-3 p-5 text-sm sm:grid-cols-4">
       <Info label="Lançamentos" value={String(resumo.lancamentos)} />
       <Info
         label="Entradas"
@@ -331,15 +362,11 @@ function ResumoPlanilha({ resumo, falta }: { resumo: Resumo; falta: string[] }) 
 function Info({ label, value, tone }: { label: string; value: string; tone?: 'green' | 'red' }) {
   return (
     <div>
-      <p className="text-xs uppercase text-slate-400">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p
-        className={
-          tone === 'green'
-            ? 'font-medium text-green-700'
-            : tone === 'red'
-              ? 'font-medium text-red-700'
-              : 'font-medium text-slate-800'
-        }
+        className={`mt-0.5 font-display font-semibold tabular-nums ${
+          tone === 'green' ? 'text-green-700' : tone === 'red' ? 'text-red-700' : 'text-slate-800'
+        }`}
       >
         {value}
       </p>

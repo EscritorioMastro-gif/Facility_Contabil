@@ -27,7 +27,7 @@ export const TransactionRow = memo(function TransactionRow({
   );
 
   return (
-    <tr className={ign ? 'bg-slate-50 text-slate-400' : ''}>
+    <tr className={ign ? 'bg-slate-50/80 text-slate-400' : ''}>
       <td className="px-2 py-1 text-center">
         <input
           type="checkbox"
@@ -37,19 +37,15 @@ export const TransactionRow = memo(function TransactionRow({
         />
       </td>
       <td className="whitespace-nowrap px-2 py-1 text-xs">{formatDate(txn.data)}</td>
-      <td className={`px-2 py-1 text-xs ${ign ? 'line-through' : 'text-slate-700'}`}>
+      <td className={`min-w-[12rem] px-2 py-1 text-xs ${ign ? 'line-through' : 'text-slate-700'}`}>
         {txn.descricao_raw}
       </td>
-      <td className="whitespace-nowrap px-2 py-1 text-right text-xs tabular-nums">
+      <td className={`whitespace-nowrap px-2 py-1 text-right text-xs font-medium tabular-nums ${!ign && txn.direction === 'entrada' ? 'text-green-700' : ''}`}>
         {formatMoney(cents)}
       </td>
       <td className="px-2 py-1">
         <span
-          className={`rounded px-1 py-0.5 text-[10px] font-medium ${
-            txn.direction === 'entrada'
-              ? 'bg-green-100 text-green-700'
-              : 'bg-red-100 text-red-700'
-          } ${ign ? 'opacity-40' : ''}`}
+          className={`chip ${txn.direction === 'entrada' ? 'chip-green' : 'chip-red'} ${ign ? 'opacity-40' : ''}`}
         >
           {txn.direction === 'entrada' ? 'ent' : 'saí'}
         </span>
@@ -59,7 +55,10 @@ export const TransactionRow = memo(function TransactionRow({
       </td>
       <td className="px-1 py-1">
         <input
-          className="input h-8 w-24 px-2 py-1 text-xs disabled:bg-slate-100"
+          className={`input input-mono h-8 w-24 rounded-lg px-2 py-1 text-xs disabled:bg-slate-100 ${
+            !ign && !draft.conta_contabil.trim() ? 'border-amber-300 bg-amber-50/40' : ''
+          }`}
+          aria-label={`Conta contábil — ${txn.descricao_raw}`}
           value={draft.conta_contabil}
           disabled={ign}
           onChange={(e) => onPatch({ conta_contabil: e.target.value })}
@@ -68,7 +67,10 @@ export const TransactionRow = memo(function TransactionRow({
       </td>
       <td className="px-1 py-1">
         <input
-          className="input h-8 w-16 px-2 py-1 text-xs disabled:bg-slate-100"
+          className={`input input-mono h-8 w-16 rounded-lg px-2 py-1 text-xs disabled:bg-slate-100 ${
+            !ign && !draft.hist_code.trim() ? 'border-amber-300 bg-amber-50/40' : ''
+          }`}
+          aria-label={`Código de histórico — ${txn.descricao_raw}`}
           value={draft.hist_code}
           disabled={ign}
           inputMode="numeric"
@@ -78,7 +80,8 @@ export const TransactionRow = memo(function TransactionRow({
       </td>
       <td className="px-1 py-1">
         <input
-          className="input h-8 w-full min-w-[13rem] px-2 py-1 text-xs disabled:bg-slate-100"
+          className="input h-8 w-full min-w-[13rem] rounded-lg px-2 py-1 text-xs disabled:bg-slate-100"
+          aria-label={`Complemento — ${txn.descricao_raw}`}
           value={draft.hist_complemento}
           disabled={ign}
           onChange={(e) => onPatch({ hist_complemento: e.target.value })}
@@ -100,7 +103,7 @@ export const TransactionRow = memo(function TransactionRow({
       <td className="whitespace-nowrap px-2 py-1 text-center">
         {txn.origem_preenchimento === 'memoria' && (
           <span
-            className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700"
+            className="chip chip-green"
             title="Preenchido pela memória (você já classificou essa descrição antes)"
           >
             memória
@@ -108,7 +111,7 @@ export const TransactionRow = memo(function TransactionRow({
         )}
         {txn.origem_preenchimento === 'conferir' && (
           <span
-            className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800"
+            className="chip chip-amber"
             title="Essa descrição já foi classificada com contas diferentes — confira"
           >
             conferir

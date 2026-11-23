@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IconEmail, IconEscudo, Spinner } from '@/components/icons';
+import { Carregando } from '@/components/ui';
 import { ApiError } from '@/lib/api';
 import {
   useAcessos,
@@ -64,8 +66,11 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
   const outrasDe = (a: AcessoCliente) => a.empresas.filter((e) => e.id !== clientId);
 
   return (
-    <div className="mt-6 border-t border-brand-200 pt-5">
-      <h3 className="text-sm font-semibold text-slate-800">Acesso do cliente ao sistema</h3>
+    <div className="mt-6 rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50/60 to-white p-5">
+      <h3 className="flex items-center gap-2 text-[15px] font-semibold text-slate-800">
+        <IconEscudo className="h-4 w-4 text-brand-600" />
+        Acesso do cliente ao sistema
+      </h3>
       <p className="mt-1 text-xs leading-relaxed text-slate-500">
         O cliente entra com o próprio e-mail e uma senha que ele mesmo cria pelo link do convite —
         o escritório não vê a senha. Ele acessa só o módulo Classificação desta empresa (e das outras
@@ -73,21 +78,17 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
       </p>
 
       {isLoading ? (
-        <p className="mt-3 text-sm text-slate-400">Carregando…</p>
+        <Carregando className="mt-3" />
       ) : error ? (
         <p className="mt-3 text-sm text-red-600">{msgErro(error)}</p>
       ) : acessos?.length ? (
-        <ul className="mt-3 divide-y divide-slate-100 rounded-md border border-slate-200">
+        <ul className="mt-3 divide-y divide-slate-100 rounded-xl border border-brand-200 bg-white">
           {acessos.map((a) => {
             const outras = outrasDe(a);
             return (
-              <li key={a.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm">
+              <li key={a.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3.5 py-2.5 text-sm">
                 <span className="font-medium text-slate-700">{a.email}</span>
-                <span
-                  className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                    a.status === 'ativo' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
+                <span className={`chip chip-dot ${a.status === 'ativo' ? 'chip-green' : 'chip-amber'}`}>
                   {a.status === 'ativo' ? 'ativo' : 'convite pendente'}
                 </span>
                 {outras.length > 0 && (
@@ -98,7 +99,7 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
                 <span className="ml-auto flex gap-3 text-xs">
                   <button
                     type="button"
-                    className="text-brand-600 hover:underline disabled:opacity-50"
+                    className="link"
                     disabled={reenviar.isPending}
                     onClick={() => onReenviar(a)}
                   >
@@ -106,7 +107,7 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
                   </button>
                   <button
                     type="button"
-                    className="text-slate-400 hover:text-red-600"
+                    className="link-danger"
                     onClick={() => setRemovendo(a)}
                   >
                     remover
@@ -117,7 +118,7 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
           })}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-slate-400">Nenhum acesso liberado para esta empresa.</p>
+        <p className="mt-3 rounded-xl border border-dashed border-brand-200 px-3.5 py-3 text-sm text-slate-500">Nenhum acesso liberado para esta empresa.</p>
       )}
 
       <form onSubmit={onLiberar} className="mt-3 flex flex-wrap gap-2">
@@ -128,16 +129,15 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <button type="submit" className="btn-ghost" disabled={!email.trim() || liberar.isPending}>
+        <button type="submit" className="btn-primary" disabled={!email.trim() || liberar.isPending}>
+          {liberar.isPending ? <Spinner /> : <IconEmail className="h-4 w-4" />}
           {liberar.isPending ? 'Enviando…' : 'Liberar acesso'}
         </button>
       </form>
 
       {aviso && (
         <p
-          className={`mt-3 rounded-md px-3 py-2 text-sm ${
-            aviso.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'
-          }`}
+          className={`alert mt-3 ${aviso.ok ? 'alert-success' : 'alert-error'}`}
         >
           {aviso.texto}
         </p>

@@ -80,8 +80,8 @@ export function Rosca({
   const marcar = (chave: string | null) => () => setAtivo(chave);
 
   return (
-    <div className="card p-4">
-      <p className="mb-3 text-sm font-medium text-slate-700">{titulo}</p>
+    <div className="card p-5">
+      <p className="card-title mb-4">{titulo}</p>
       {!itens.length || total <= 0 ? (
         <p className="text-sm text-slate-400">{vazio}</p>
       ) : (
@@ -106,7 +106,7 @@ export function Rosca({
               ))}
             </svg>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-              <span className="text-sm font-semibold tabular-nums text-slate-800">
+              <span className="font-display text-sm font-semibold tabular-nums text-slate-800">
                 {reais(foco ? foco.total_cents : total)}
               </span>
               <span className="max-w-[6.5rem] text-[11px] leading-tight text-slate-500">
@@ -236,9 +236,9 @@ export function MapaArvore({
 }) {
   const positivos = useMemo(() => itens.filter((i) => i.total_cents > 0), [itens]);
   return (
-    <div className="card p-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-medium text-slate-700">{titulo}</p>
+    <div className="card p-5">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <p className="card-title">{titulo}</p>
         <p className="text-sm tabular-nums text-slate-500">Total {formatMoney(total)}</p>
       </div>
       {positivos.length ? (
@@ -271,7 +271,7 @@ function Blocos({ titulo, itens, rampa }: { titulo: string; itens: ItemDashboard
             return (
               <div
                 key={i.nome}
-                className="absolute overflow-hidden rounded-md border-2 border-white px-1.5 py-1 text-[11.5px] leading-snug"
+                className="absolute overflow-hidden rounded-lg border-2 border-white px-1.5 py-1 text-[11.5px] leading-snug transition-[filter] hover:brightness-110"
                 style={{ left: b.x, top: b.y, width: b.w, height: b.h, background: rampa[tom], color: tom === 3 ? rampa[0] : '#fff' }}
                 title={`${i.nome}: ${formatMoney(i.total_cents)} · ${pct(i.percentual)}`}
                 onMouseEnter={() => setFoco(i)}

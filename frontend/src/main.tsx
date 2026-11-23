@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthProvider';
 import { ErroDeTela } from './components/ErroDeTela';
+import { Toaster } from './components/Toaster';
 import { queryClient } from './lib/queryClient';
 import './index.css';
 
@@ -14,7 +15,9 @@ createRoot(document.getElementById('root')!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <App />
+            <Toaster>
+              <App />
+            </Toaster>
           </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>

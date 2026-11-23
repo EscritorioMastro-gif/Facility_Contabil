@@ -3,6 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Paginacao, usePaginacao } from '@/components/Paginacao';
 import { TabelaRolavel } from '@/components/TabelaRolavel';
+import { IconDownload, IconSalvar, IconSetaEsquerda, Spinner } from '@/components/icons';
+import { BarraAcoes, BarraProgresso, Carregando, ErroCarregar, Etapas, Kbd, Metrica, PageHeader, Segmented, Vazio } from '@/components/ui';
+import { ETAPAS_IMPORTACAO } from '@/lib/etapas';
+import { useToast } from '@/lib/toast';
+import { useAtalhoSalvar } from '@/lib/useAtalhoSalvar';
 import { ApiError } from '@/lib/api';
 import { formatDate } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
@@ -30,6 +35,7 @@ export function RevisaoPage() {
   const gerar = useGenerateDominio(id);
   const [filter, setFilter] = useState<Filter>('saida');
   const [confirmSair, setConfirmSair] = useState(false);
+  const toast = useToast();
 
   const transactions = useMemo(() => data?.transactions ?? [], [data]);
   const { get, patchRow, patchMany, reset, changes, isDirty } = useRevisaoDraft(transactions);
@@ -86,13 +92,11 @@ export function RevisaoPage() {
 
   const pag = usePaginacao(shown, 'revisao', filter);
 
-  if (isLoading) return <p className="text-sm text-slate-400">Carregando…</p>;
-  if (error || !data)
-    return (
-      <p className="text-sm text-red-600">
-        {error instanceof Error ? error.message : 'Importação não encontrada'}
-      </p>
-    );
+  // Ctrl+S salva (o mesmo que o botão "Salvar")
+  useAtalhoSalvar(() => onSave());
+
+  if (isLoading) return <Carregando texto="Carregando a importação…" className="py-10" />;
+  if (error || !data) return <ErroCarregar erro={error} padrao="Importação não encontrada" />;
 
   const st = data.statement;
   const complementoModo = st.complemento_modo ?? 'extrato';
@@ -110,8 +114,23 @@ export function RevisaoPage() {
   }
 
   function onSave() {
-    if (!isDirty) return;
-    save.mutate(changes);
+    if (!isDirty || save.isPending) return;
+    const n = changes.length;
+    save.mutate(changes, {
+      onSuccess: () =>
+        toast({ texto: 'Alterações salvas', detalhe: `${n} lançamento(s) atualizado(s) — a memória do cliente já aprendeu.` }),
+    });
+  }
+
+  function gerarArquivo() {
+    gerar.mutate(undefined, {
+      onSuccess: (r) =>
+        toast({
+          texto: 'Arquivo do Domínio gerado',
+          detalhe: `${r.filename} · ${r.linhas} linhas — importe em Utilitários → Importação → Lançamentos contábeis em lote.`,
+          duracao: 8000,
+        }),
+    });
   }
 
   const saveErr =
@@ -129,109 +148,110 @@ export function RevisaoPage() {
 
   const podeGerar = !isDirty && stats.pend === 0 && stats.ativos > 0 && !gerar.isPending;
 
-  return (
-    <section className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-800">Revisão</h1>
-          <p className="text-sm text-slate-500">
-            {st.client?.razao_social ?? 'cliente'} · {st.arquivo_nome} ·{' '}
-            {st.period_start && st.period_end
-              ? `${formatDate(st.period_start)}–${formatDate(st.period_end)}`
-              : 'sem período'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            className="btn-ghost"
-            onClick={() => (isDirty ? setConfirmSair(true) : navigate('/historico'))}
-          >
-            Voltar
-          </button>
-          <ReimportarExtrato
-            statementId={id}
-            qtd={transactions.length}
-            as="button"
-            excel={!!st.excel_mapeamento}
-          />
-          <button className="btn-primary" onClick={onSave} disabled={!isDirty || save.isPending}>
-            {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
-          </button>
-        </div>
-      </div>
+  const sair = () => (isDirty ? setConfirmSair(true) : navigate('/historico'));
 
-      {st.erro_msg && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{st.erro_msg}</p>
-      )}
-      {saveErr && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{saveErr}</p>
-      )}
+  return (
+    <section className="space-y-5">
+      <PageHeader
+        titulo="Revisão das contas"
+        descricao={
+          <>
+            <span className="font-semibold text-slate-700">{st.client?.razao_social ?? 'cliente'}</span> · {st.arquivo_nome} ·{' '}
+            {st.period_start && st.period_end
+              ? `${formatDate(st.period_start)} a ${formatDate(st.period_end)}`
+              : 'sem período'}
+          </>
+        }
+        acoes={
+          <>
+            <button className="btn-ghost" onClick={sair}>
+              <IconSetaEsquerda className="h-4 w-4" />
+              Voltar
+            </button>
+            <ReimportarExtrato
+              statementId={id}
+              qtd={transactions.length}
+              as="button"
+              excel={!!st.excel_mapeamento}
+            />
+          </>
+        }
+      >
+        <Etapas etapas={ETAPAS_IMPORTACAO} atual={st.status === 'gerado' ? 4 : 2} />
+      </PageHeader>
+
+      {st.erro_msg && <p className="alert alert-error">{st.erro_msg}</p>}
+      {saveErr && <p className="alert alert-error">{saveErr}</p>}
       {stats.conferir > 0 && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="alert alert-warn">
           {stats.conferir} lançamento(s) preenchido(s) pela memória, mas a descrição já teve outras
           contas — confira o filtro "Conferir".
         </p>
       )}
 
-      <HeaderForm
-        st={{
-          banco_conta_contabil: st.banco_conta_contabil ?? '',
-          hist_code_entrada: st.hist_code_entrada,
-          hist_code_saida: st.hist_code_saida,
-          lote_numero: st.lote_numero,
-        }}
-        onSave={(f) => header.mutate(f)}
-        saving={header.isPending}
-      />
-
-      <SaldoReconciliacao
-        transactions={transactions}
-        saldoInicial={saldoInicial}
-        onSaldoInicial={(v) => header.mutate({ saldo_inicial: v.toFixed(2) })}
-      />
-
-      <div className="card grid grid-cols-2 gap-x-6 gap-y-1 p-3 text-sm sm:grid-cols-5">
-        <Stat label="Ativos" value={String(stats.ativos)} />
-        <Stat label="Prontos" value={String(stats.prontos)} tone="green" />
-        <Stat label="Pendentes" value={String(stats.pend)} tone={stats.pend ? 'amber' : undefined} />
-        <Stat
-          label="Conferir"
-          value={String(stats.conferir)}
-          tone={stats.conferir ? 'amber' : undefined}
-        />
-        <Stat label="Inativados" value={String(stats.inut)} />
+      {/* progresso */}
+      <div className="card p-5">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-5">
+          <Metrica rotulo="Ativos" valor={stats.ativos} tom="brand" />
+          <Metrica rotulo="Prontos" valor={stats.prontos} tom="green" />
+          <Metrica rotulo="Pendentes" valor={stats.pend} tom={stats.pend ? 'amber' : undefined} />
+          <Metrica rotulo="Conferir" valor={stats.conferir} tom={stats.conferir ? 'amber' : undefined} />
+          <Metrica rotulo="Inativados" valor={stats.inut} />
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <BarraProgresso feito={stats.prontos} total={stats.ativos} rotulo="Lançamentos prontos" />
+          <span className="shrink-0 text-xs font-semibold tabular-nums text-slate-500">
+            {stats.ativos ? Math.round((stats.prontos / stats.ativos) * 100) : 0}% pronto
+          </span>
+        </div>
       </div>
 
-      <BulkBar
-        onApplyConta={applyConta}
-        onApplyHist={applyHist}
-        onIgnore={bulkIgnore}
-        complementoModo={complementoModo}
-        onComplementoModo={(m) => header.mutate({ complemento_modo: m })}
-        savingModo={header.isPending}
-      />
+      <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
+          <HeaderForm
+            st={{
+              banco_conta_contabil: st.banco_conta_contabil ?? '',
+              hist_code_entrada: st.hist_code_entrada,
+              hist_code_saida: st.hist_code_saida,
+              lote_numero: st.lote_numero,
+            }}
+            onSave={(f) => header.mutate(f, { onSuccess: () => toast({ texto: 'Cabeçalho salvo' }) })}
+            saving={header.isPending}
+          />
+          <BulkBar
+            onApplyConta={applyConta}
+            onApplyHist={applyHist}
+            onIgnore={bulkIgnore}
+            complementoModo={complementoModo}
+            onComplementoModo={(m) => header.mutate({ complemento_modo: m })}
+            savingModo={header.isPending}
+          />
+        </div>
+        <SaldoReconciliacao
+          transactions={transactions}
+          saldoInicial={saldoInicial}
+          onSaldoInicial={(v) => header.mutate({ saldo_inicial: v.toFixed(2) })}
+        />
+      </div>
 
-      <div className="flex flex-wrap gap-1 text-sm">
-        {(
-          [
-            ['saida', `Saídas`],
-            ['entrada', `Entradas`],
-            ['pendentes', `Pendentes (${stats.pend})`],
-            ...(stats.conferir ? [['conferir', `Conferir (${stats.conferir})`] as [Filter, string]] : []),
-            ['inativadas', `Inativadas (${stats.inut})`],
-            ['todas', `Todas`],
-          ] as [Filter, string][]
-        ).map(([f, label]) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`rounded-md px-3 py-1.5 font-medium ${
-              filter === f ? 'bg-brand-600 text-white' : 'border border-slate-300 bg-white text-slate-600'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+        <Segmented
+          label="Filtrar lançamentos"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'saida', label: 'Saídas' },
+            { value: 'entrada', label: 'Entradas' },
+            { value: 'pendentes', label: 'Pendentes', count: stats.pend },
+            ...(stats.conferir ? [{ value: 'conferir' as Filter, label: 'Conferir', count: stats.conferir }] : []),
+            { value: 'inativadas', label: 'Inativadas', count: stats.inut },
+            { value: 'todas', label: 'Todas', count: transactions.length },
+          ]}
+        />
+        <p className="hidden items-center gap-1.5 text-xs text-slate-500 lg:flex">
+          <Kbd>Ctrl</Kbd>
+          <Kbd>S</Kbd> salva as alterações
+        </p>
       </div>
 
       <Paginacao
@@ -247,7 +267,9 @@ export function RevisaoPage() {
         <table className="w-full text-sm">
           <thead className="text-left text-[10px] uppercase text-slate-500">
             <tr>
-              <th className="px-2 py-2">Inativar</th>
+              <th className="px-2 py-2" title="Inativar: o lançamento não vai para o arquivo">
+                Inativar
+              </th>
               <th className="px-2 py-2">Data</th>
               <th className="px-2 py-2">Histórico do extrato</th>
               <th className="px-2 py-2 text-right">Valor</th>
@@ -273,9 +295,7 @@ export function RevisaoPage() {
             ))}
           </tbody>
         </table>
-        {shown.length === 0 && (
-          <p className="p-6 text-sm text-slate-400">Nenhum lançamento neste filtro.</p>
-        )}
+        {shown.length === 0 && <Vazio titulo="Nenhum lançamento neste filtro" texto="Troque o filtro acima para ver os outros lançamentos." />}
       </TabelaRolavel>
 
       <Paginacao
@@ -287,51 +307,61 @@ export function RevisaoPage() {
         onPorPagina={pag.setPorPagina}
       />
 
-      {gerarErr && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{gerarErr}</p>
-      )}
+      {gerarErr && <p className="alert alert-error">{gerarErr}</p>}
       {gerar.isSuccess && gerar.data && (
-        <p className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+        <p className="alert alert-success">
           Arquivo <span className="font-mono">{gerar.data.filename}</span> gerado ({gerar.data.linhas}{' '}
           linhas) e baixado. Importe no Domínio: Utilitários → Importação → Lançamentos contábeis em
           lote.
         </p>
       )}
 
-      <div className="flex items-center justify-between rounded-md bg-slate-100 px-3 py-2 text-sm">
-        <span className="text-slate-500">
-          {isDirty
-            ? 'Salve as alterações antes de gerar o arquivo.'
-            : stats.pend > 0
-              ? `${stats.pend} lançamento(s) ainda sem conta contábil ou código de histórico.`
-              : `Pronto: ${stats.ativos} lançamento(s) ativo(s).`}
-        </span>
-        <div className="flex gap-2">
-          {isDirty && (
-            <button className="btn-ghost" onClick={reset}>
-              Descartar alterações
-            </button>
-          )}
-          <button
-            className="btn-primary"
-            disabled={!podeGerar}
-            title={
-              isDirty
-                ? 'Salve as alterações primeiro'
-                : stats.pend > 0
-                  ? 'Classifique os lançamentos pendentes'
-                  : 'Gera o .txt no Leiaute Domínio'
-            }
-            onClick={() => gerar.mutate()}
-          >
-            {gerar.isPending
-              ? 'Gerando…'
-              : st.status === 'gerado'
-                ? 'Gerar de novo'
-                : 'Gerar arquivo Domínio'}
+      <BarraAcoes
+        status={
+          isDirty ? (
+            <span className="flex items-center gap-2 font-semibold text-amber-700">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+              {changes.length} alteração(ões) não salva(s) — salve antes de gerar o arquivo.
+            </span>
+          ) : stats.pend > 0 ? (
+            `${stats.pend} lançamento(s) ainda sem conta contábil ou código de histórico.`
+          ) : (
+            <span className="flex items-center gap-2 font-semibold text-green-700">
+              <span className="h-2 w-2 rounded-full bg-green-500" />
+              Pronto: {stats.ativos} lançamento(s) ativo(s).
+            </span>
+          )
+        }
+      >
+        {isDirty && (
+          <button className="btn-quiet" onClick={reset}>
+            Descartar
           </button>
-        </div>
-      </div>
+        )}
+        <button className={isDirty ? 'btn-primary' : 'btn-ghost'} onClick={onSave} disabled={!isDirty || save.isPending} title="Salvar (Ctrl+S)">
+          {save.isPending ? <Spinner /> : <IconSalvar className="h-4 w-4" />}
+          {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
+        </button>
+        <button
+          className={isDirty ? 'btn-ghost' : 'btn-primary'}
+          disabled={!podeGerar}
+          title={
+            isDirty
+              ? 'Salve as alterações primeiro'
+              : stats.pend > 0
+                ? 'Classifique os lançamentos pendentes'
+                : 'Gera o .txt no Leiaute Domínio'
+          }
+          onClick={gerarArquivo}
+        >
+          {gerar.isPending ? <Spinner /> : <IconDownload className="h-4 w-4" />}
+          {gerar.isPending
+            ? 'Gerando…'
+            : st.status === 'gerado'
+              ? 'Gerar de novo'
+              : 'Gerar arquivo Domínio'}
+        </button>
+      </BarraAcoes>
 
       <ConfirmDialog
         open={confirmSair}
@@ -342,29 +372,6 @@ export function RevisaoPage() {
         onCancel={() => setConfirmSair(false)}
       />
     </section>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: 'green' | 'amber';
-}) {
-  return (
-    <div>
-      <p className="text-[10px] uppercase text-slate-400">{label}</p>
-      <p
-        className={`font-semibold ${
-          tone === 'green' ? 'text-green-700' : tone === 'amber' ? 'text-amber-700' : 'text-slate-800'
-        }`}
-      >
-        {value}
-      </p>
-    </div>
   );
 }
 
@@ -410,26 +417,28 @@ function HeaderForm({
     lote !== st.lote_numero;
 
   return (
-    <div className="card flex flex-wrap items-end gap-3 p-3 text-sm">
+    <div className="card p-5 text-sm">
+      <p className="card-title">Cabeçalho do Domínio</p>
+      <div className="mt-3 flex flex-wrap items-end gap-3">
       <Field label="Conta do banco">
-        <input className="input h-9 w-28" value={banco} onChange={(e) => setBanco(e.target.value)} />
+        <input className="input input-mono h-9 w-28" value={banco} onChange={(e) => setBanco(e.target.value)} />
       </Field>
       <Field label="Hist. entrada">
-        <input className="input h-9 w-20" value={he} onChange={(e) => setHe(e.target.value)} />
+        <input className="input input-mono h-9 w-20" value={he} onChange={(e) => setHe(e.target.value)} />
       </Field>
       <Field label="Hist. saída">
-        <input className="input h-9 w-20" value={hs} onChange={(e) => setHs(e.target.value)} />
+        <input className="input input-mono h-9 w-20" value={hs} onChange={(e) => setHs(e.target.value)} />
       </Field>
       <Field label="Lote Domínio">
         <input
-          className="input h-9 w-24"
+          className="input input-mono h-9 w-24"
           type="number"
           value={lote}
           onChange={(e) => setLote(Number(e.target.value))}
         />
       </Field>
       <button
-        className="btn-ghost h-9"
+        className={dirty ? 'btn-primary h-9' : 'btn-ghost h-9'}
         disabled={!dirty || saving}
         onClick={() =>
           onSave({
@@ -442,6 +451,7 @@ function HeaderForm({
       >
         {saving ? 'Salvando…' : 'Salvar cabeçalho'}
       </button>
+      </div>
     </div>
   );
 }
@@ -449,7 +459,7 @@ function HeaderForm({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col">
-      <span className="mb-1 text-xs text-slate-500">{label}</span>
+      <span className="field-label">{label}</span>
       {children}
     </label>
   );

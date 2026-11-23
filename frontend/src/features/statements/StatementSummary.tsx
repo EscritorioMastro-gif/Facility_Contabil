@@ -1,3 +1,4 @@
+import { IconArquivo } from '@/components/icons';
 import { formatDate, formatMoney } from '@/lib/format';
 import type { Statement, StatementTotais } from '@/lib/types';
 
@@ -20,34 +21,38 @@ export function StatementSummary({
       : '—';
 
   return (
-    <div className="card grid grid-cols-2 gap-x-8 gap-y-2 p-4 text-sm sm:grid-cols-4">
-      <Info label="Arquivo" value={`${statement.arquivo_nome} (${statement.formato.toUpperCase()})`} />
-      <Info label="Período" value={periodo} />
-      {!resumido && (
-        <>
-          <Info label="Conta do banco" value={statement.banco_conta_contabil ?? '—'} />
-          <Info label="Lote Domínio" value={String(statement.lote_numero)} />
-        </>
-      )}
-      {hasTotais(t) && (
-        <>
-          <Info label="Lançamentos" value={String(t.qtd)} />
-          <Info
-            label="Entradas"
-            value={`${t.entradas.n} · ${formatMoney(t.entradas.valor_cents)}`}
-            tone="green"
-          />
-          <Info
-            label="Saídas"
-            value={`${t.saidas.n} · ${formatMoney(t.saidas.valor_cents)}`}
-            tone="red"
-          />
-          <Info
-            label="Resultado"
-            value={formatMoney(t.entradas.valor_cents - t.saidas.valor_cents)}
-          />
-        </>
-      )}
+    <div className="card overflow-hidden">
+      <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-gradient-to-r from-brand-50/70 to-transparent px-5 py-3">
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-brand-600 shadow-sm ring-1 ring-brand-200">
+          <IconArquivo className="h-[18px] w-[18px]" />
+        </span>
+        {/* min-w-0 + overflow-wrap: nome de arquivo sem espaço ("financeiro_20260902.xlsx") quebra em vez de invadir */}
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-slate-800 [overflow-wrap:anywhere]">{statement.arquivo_nome}</p>
+          <p className="text-xs text-slate-500">Período {periodo}</p>
+        </div>
+        <span className="chip chip-brand font-mono">{statement.formato.toUpperCase()}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-5 py-4 text-sm sm:grid-cols-3 lg:grid-cols-6">
+        {!resumido && (
+          <>
+            <Info label="Conta do banco" value={statement.banco_conta_contabil ?? '—'} mono />
+            <Info label="Lote Domínio" value={String(statement.lote_numero)} mono />
+          </>
+        )}
+        {hasTotais(t) && (
+          <>
+            <Info label="Lançamentos" value={String(t.qtd)} />
+            <Info label={`Entradas · ${t.entradas.n}`} value={formatMoney(t.entradas.valor_cents)} tone="green" />
+            <Info label={`Saídas · ${t.saidas.n}`} value={formatMoney(t.saidas.valor_cents)} tone="red" />
+            <Info
+              label="Resultado"
+              value={formatMoney(t.entradas.valor_cents - t.saidas.valor_cents)}
+              tone={t.entradas.valor_cents - t.saidas.valor_cents < 0 ? 'red' : undefined}
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -56,23 +61,19 @@ function Info({
   label,
   value,
   tone,
+  mono,
 }: {
   label: string;
   value: string;
   tone?: 'green' | 'red';
+  mono?: boolean;
 }) {
   return (
-    // min-w-0 + overflow-wrap: nome de arquivo sem espaço ("financeiro_20260902.xlsx")
-    // quebra dentro da coluna em vez de invadir a do lado
     <div className="min-w-0">
-      <p className="text-xs uppercase text-slate-400">{label}</p>
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
       <p
-        className={`[overflow-wrap:anywhere] ${
-          tone === 'green'
-            ? 'font-medium text-green-700'
-            : tone === 'red'
-              ? 'font-medium text-red-700'
-              : 'font-medium text-slate-800'
+        className={`mt-0.5 font-semibold tabular-nums [overflow-wrap:anywhere] ${mono ? 'font-mono text-[13px]' : 'font-display'} ${
+          tone === 'green' ? 'text-green-700' : tone === 'red' ? 'text-red-700' : 'text-slate-800'
         }`}
       >
         {value}

@@ -22,8 +22,11 @@ export class ErroDeTela extends Component<{ children: ReactNode }, Estado> {
   render() {
     if (!this.state.erro) return this.props.children;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-cream px-4">
-        <div className="card max-w-md p-6 text-center">
+      <div className="flex min-h-screen items-center justify-center px-4">
+        <div className="card max-w-md animate-scale-in p-7 text-center">
+          <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-red-50 text-xl font-bold text-red-600 ring-1 ring-red-200">
+            !
+          </span>
           <h1 className="text-lg font-semibold text-slate-800">Algo deu errado nesta tela</h1>
           <p className="mt-2 text-sm leading-relaxed text-slate-500">
             O que já estava salvo não foi perdido. Recarregue a página para continuar — se o erro
