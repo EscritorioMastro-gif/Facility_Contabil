@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { serviceClient } from '../supabase.js';
 import { forbidden } from './httpError.js';
 import { logger } from './logger.js';
@@ -28,6 +29,13 @@ export function esquecerEscritorio(userId?: string): void {
 export function escritorioDe(req: Request): string {
   if (!req.escritorioId) throw new Error('escritório ausente (falta o middleware exigirEscritorio)');
   return req.escritorioId;
+}
+
+/** O login administra a equipe do escritório? (Cadastros → Equipe; `supabase` = o cliente do login) */
+export async function souAdminDoEscritorio(supabase: SupabaseClient): Promise<boolean> {
+  const { data, error } = await supabase.rpc('sou_admin_do_escritorio');
+  if (error) throw mapPgrstError(error, 'conferir se o login administra o escritório');
+  return data === true;
 }
 
 /**

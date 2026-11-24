@@ -143,8 +143,9 @@ describe('migration 0023 — lista geral, memória e trava de duplicado', () => 
     const { rows } = await db.query<{ id: string }>(
       `select id from public.transactions where statement_id = '${S_SET}' and descricao_raw = 'ENERGISA  conta'`,
     );
-    await como(db, DOC, () =>
-      db.query(`select public.update_transactions_classificacao($1, $2::jsonb)`, [
+    // quem grava a classificação é o portal do cliente (migration 0031)
+    await como(db, 'service_role', () =>
+      db.query(`select public.update_transactions_classificacao_portal($1, $2::jsonb)`, [
         S_SET,
         JSON.stringify([{ id: rows[0]!.id, classificacao_id: K_ENERGIA }]),
       ]),

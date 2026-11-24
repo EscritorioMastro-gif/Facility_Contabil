@@ -56,7 +56,7 @@ export function ClassificacaoHistoricoPage() {
         acoes={
           <Link to="/classificacao" className="btn-primary">
             <IconMais className="h-4 w-4" />
-            Classificar extrato
+            {ehCliente ? 'Classificar extrato' : 'Enviar extrato'}
           </Link>
         }
       />
@@ -100,7 +100,7 @@ export function ClassificacaoHistoricoPage() {
             acao={
               !clientId && (
                 <Link to="/classificacao" className="btn-primary">
-                  Classificar o primeiro extrato
+                  {ehCliente ? 'Classificar o primeiro extrato' : 'Enviar o primeiro extrato'}
                 </Link>
               )
             }
@@ -155,7 +155,8 @@ export function ClassificacaoHistoricoPage() {
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {s.status !== 'parsing' && (
                         <Link to={destino} className="link">
-                          {s.status === 'classificacao' ? 'classificar' : 'abrir'}
+                          {/* só o cliente classifica — o escritório abre pra consultar */}
+                          {s.status === 'classificacao' && ehCliente ? 'classificar' : 'abrir'}
                           <IconSetaDireita className="h-3.5 w-3.5" />
                         </Link>
                       )}
@@ -186,7 +187,12 @@ export function ClassificacaoHistoricoPage() {
       <ConfirmDialog
         open={!!deleting}
         title="Excluir extrato"
-        message={`Excluir o extrato "${deleting?.arquivo_nome}"? Os lançamentos e classificações serão apagados.`}
+        message={
+          `Excluir o extrato "${deleting?.arquivo_nome}"? Os lançamentos e classificações serão apagados.` +
+          (!ehCliente && deleting?.aprovado_em
+            ? ' O cliente já aprovou classificações deste extrato: o registro das aprovações dele é apagado junto, e só quem administra o escritório consegue excluir.'
+            : '')
+        }
         busy={delMut.isPending}
         error={
           delMut.isError ? (delMut.error instanceof ApiError ? delMut.error.message : 'Falha ao excluir') : null

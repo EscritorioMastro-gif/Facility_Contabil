@@ -240,6 +240,7 @@ export function HistoricoPage() {
                             statementId={s.id}
                             qtd={totais?.qtd ?? 0}
                             excel={!!s.excel_mapeamento}
+                            aprovado={!!s.aprovado_em}
                           />
                         </>
                       )}
@@ -273,7 +274,12 @@ export function HistoricoPage() {
       <ConfirmDialog
         open={!!deleting}
         title="Excluir importação"
-        message={`Excluir a importação de "${deleting?.arquivo_nome}"? Os lançamentos lidos serão apagados.`}
+        message={
+          `Excluir a importação de "${deleting?.arquivo_nome}"? Os lançamentos lidos serão apagados.` +
+          (deleting?.aprovado_em
+            ? ' O cliente já aprovou classificações deste extrato: o registro das aprovações dele é apagado junto, e só quem administra o escritório consegue excluir.'
+            : '')
+        }
         busy={delMut.isPending}
         error={
           delMut.isError

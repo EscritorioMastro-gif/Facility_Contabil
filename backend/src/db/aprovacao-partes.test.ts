@@ -132,25 +132,19 @@ describe('migration 0028 — aprovação em partes', () => {
     ]);
   });
 
-  it('o escritório classificar um pendente também não é alteração', async () => {
-    await como(db, ESC, () =>
-      db.query(`select public.update_transactions_classificacao($1, $2::jsonb)`, [
-        S,
-        JSON.stringify([{ id: T4, classificacao_id: K_ALUGUEL }]),
-      ]),
-    );
+  it('o escritório não classifica — nem o pendente (só o cliente: migration 0031)', async () => {
+    await expect(
+      como(db, ESC, () => db.query(`update public.transactions set classificacao_id = $2 where id = $1`, [T4, K_ALUGUEL])),
+    ).rejects.toThrow(/só pelo cliente/);
     expect((await extrato(db, S)).classificacao_alterada_em).toBeNull();
     // continua parcial: o cliente aprovou 3 e faltava 1
     expect(await extrato(db, S)).toMatchObject({ aprovado_qtd: 3, aprovado_pendentes: 1 });
   });
 
   it('mudar um lançamento JÁ aprovado marca alterado; a nova aprovação conta só ele e o que faltava', async () => {
-    await como(db, ESC, () =>
-      db.query(`select public.update_transactions_classificacao($1, $2::jsonb)`, [
-        S,
-        JSON.stringify([{ id: T2, classificacao_id: K_ALUGUEL }]),
-      ]),
-    );
+    await classificarPeloPortal(db, S, T4, K_ALUGUEL); // o que faltava: não é alteração
+    expect((await extrato(db, S)).classificacao_alterada_em).toBeNull();
+    await classificarPeloPortal(db, S, T2, K_ALUGUEL); // já aprovado: é
     const s = await extrato(db, S);
     expect(s.classificacao_alterada_em).not.toBeNull();
     expect(ms(s.classificacao_alterada_em!)).toBeGreaterThan(ms(s.aprovado_em!));

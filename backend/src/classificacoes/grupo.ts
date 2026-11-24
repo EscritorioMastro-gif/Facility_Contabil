@@ -15,7 +15,7 @@
  * depois de a rota conferir a permissão.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { badRequest } from '../lib/httpError.js';
+import { badRequest, forbidden } from '../lib/httpError.js';
 import { lerTodas, mapPgrstError } from '../lib/pgrst.js';
 
 export const COLS_CLASSIFICACAO = 'id, client_id, direction, nome, ativo, geral_id, created_at, updated_at';
@@ -149,10 +149,25 @@ async function mesmoItemNoGrupo(db: SupabaseClient, item: Classificacao): Promis
   return atuais.filter((c) => c.id === item.id || chaveDoItem(c) === k);
 }
 
+/** Quantos lançamentos apontam pra essas classificações na coluna dada. */
+async function usos(
+  db: SupabaseClient,
+  coluna: 'classificacao_id' | 'aprovado_classificacao_id',
+  ids: string[],
+): Promise<number> {
+  const { count, error } = await db.from('transactions').select('id', { count: 'exact', head: true }).in(coluna, ids);
+  if (error) throw mapPgrstError(error, 'verificar o uso da classificação');
+  return count ?? 0;
+}
+
+export const NOME_APROVADO =
+  'Essa classificação já está em lançamentos aprovados pelo cliente — o nome não pode mais mudar. ' +
+  'Se precisar de outro nome, crie uma classificação nova e desative esta.';
+
 /**
  * Tira o item da lista do grupo: onde não está em uso, exclui; onde algum
- * lançamento usa, desativa (some da lista de escolha, os lançamentos antigos
- * continuam com ela).
+ * lançamento usa (ou o cliente aprovou um lançamento com ela), desativa — some
+ * da lista de escolha, os lançamentos antigos continuam com ela.
  */
 export async function removerDoGrupo(
   db: SupabaseClient,
@@ -162,12 +177,9 @@ export async function removerDoGrupo(
   const excluir: string[] = [];
   const desativar: string[] = [];
   for (const c of linhas) {
-    const { count, error } = await db
-      .from('transactions')
-      .select('id', { count: 'exact', head: true })
-      .eq('classificacao_id', c.id);
-    if (error) throw mapPgrstError(error, 'verificar o uso da classificação');
-    (count ? desativar : excluir).push(c.id);
+    // em uso = algum lançamento está com ela, ou o cliente aprovou um lançamento com ela
+    const emUso = (await usos(db, 'classificacao_id', [c.id])) > 0 || (await usos(db, 'aprovado_classificacao_id', [c.id])) > 0;
+    (emUso ? desativar : excluir).push(c.id);
   }
   if (excluir.length) {
     const { error } = await db.from('classificacoes').delete().in('id', excluir);
@@ -197,6 +209,10 @@ export async function alterarNoGrupo(
     const ids = new Set(linhas.map((c) => c.id));
     if (atuais.some((c) => !ids.has(c.id) && chaveDoItem(c) === chaveDoItem({ direction: item.direction, nome }))) {
       throw badRequest(DUPLICADA);
+    }
+    // renomear mudaria o que o cliente aprovou sem tocar no lançamento (migration 0031)
+    if (linhas.some((c) => c.nome !== nome) && (await usos(db, 'aprovado_classificacao_id', [...ids])) > 0) {
+      throw forbidden(NOME_APROVADO);
     }
     dados.nome = nome;
   }

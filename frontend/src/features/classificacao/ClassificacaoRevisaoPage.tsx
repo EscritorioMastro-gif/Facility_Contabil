@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Paginacao, usePaginacao } from '@/components/Paginacao';
 import { TabelaRolavel } from '@/components/TabelaRolavel';
-import { IconCheck, IconSalvar, IconSetaDireita, IconSetaEsquerda, Spinner } from '@/components/icons';
+import { IconCadeado, IconCheck, IconSetaDireita, IconSetaEsquerda, Spinner } from '@/components/icons';
 import { BarraAcoes, BarraProgresso, Carregando, ErroCarregar, Etapas, Kbd, Metrica, PageHeader, Segmented, Vazio } from '@/components/ui';
 import { ETAPAS_CLASSIFICACAO } from '@/lib/etapas';
 import { useToast } from '@/lib/toast';
@@ -114,13 +114,11 @@ export function ClassificacaoRevisaoPage() {
 
   const pag = usePaginacao(shown, 'classificacao', filter);
 
-  // Ctrl+S: o escritório salva; o cliente salva pelo "Salvar e aprovar"
+  // Ctrl+S: o cliente salva pelo "Salvar e aprovar"; o escritório só consulta
   useAtalhoSalvar(() => {
-    if (ehCliente) {
-      if (isDirty) toast({ tipo: 'info', texto: 'Para salvar, use “Salvar e aprovar”', detalhe: 'Ele salva e registra que você conferiu o que já está classificado.' });
-      return;
+    if (ehCliente && isDirty) {
+      toast({ tipo: 'info', texto: 'Para salvar, use “Salvar e aprovar”', detalhe: 'Ele salva e registra que você conferiu o que já está classificado.' });
     }
-    onSave();
   });
 
   // Enter desce pro lançamento de baixo (Shift+Enter sobe), passando de página
@@ -154,8 +152,9 @@ export function ClassificacaoRevisaoPage() {
 
   const st = data.statement;
   const jaPuxado = st.status !== 'classificacao';
-  // login de cliente: depois que o escritório puxou o extrato, só consulta
-  const somenteLeitura = ehCliente && jaPuxado;
+  // Só o cliente classifica (migration 0031): o escritório sempre consulta; o
+  // cliente também, depois que o escritório puxou o extrato.
+  const somenteLeitura = !ehCliente || jaPuxado;
 
   // Login de cliente: um botão só, "Salvar e aprovar". Salva o que ele classificou
   // e registra que conferiu e aprova o que JÁ está classificado — mesmo com
@@ -169,15 +168,6 @@ export function ClassificacaoRevisaoPage() {
     stats.classificados > 0 &&
     temNovidade;
   const ocupado = save.isPending || aprovar.isPending;
-
-  function onSave() {
-    if (!isDirty || save.isPending) return;
-    setIguais(null);
-    const n = changes.length;
-    save.mutate(changes, {
-      onSuccess: () => toast({ texto: 'Classificações salvas', detalhe: `${n} lançamento(s) atualizado(s) — a memória já aprendeu.` }),
-    });
-  }
 
   function abrirAprovacao() {
     setIguais(null);
@@ -300,7 +290,7 @@ export function ClassificacaoRevisaoPage() {
   return (
     <section className="space-y-5">
       <PageHeader
-        titulo="Classificar lançamentos"
+        titulo={ehCliente ? 'Classificar lançamentos' : 'Classificações do cliente'}
         descricao={
           <>
             <span className="font-semibold text-slate-700">{st.client?.razao_social ?? 'cliente'}</span> · {st.arquivo_nome} ·{' '}
@@ -323,16 +313,20 @@ export function ClassificacaoRevisaoPage() {
       <AvisoAprovacao st={st} ehCliente={ehCliente} />
       <HistoricoAprovacoes st={st} ehCliente={ehCliente} />
 
-      {jaPuxado && (
+      {!ehCliente && (
+        <p className="alert alert-info flex items-start gap-2" role="note">
+          <IconCadeado className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <b>Só o cliente classifica.</b> Aqui o escritório consulta as classificações e as aprovações.{' '}
+            {jaPuxado
+              ? `Este extrato já foi puxado pro módulo Importação (status atual: ${st.status}) e as classificações do cliente seguem valendo pro arquivo do Domínio.`
+              : 'Se alguma estiver errada, peça ao cliente para corrigir e aprovar de novo no acesso dele.'}
+          </span>
+        </p>
+      )}
+      {ehCliente && jaPuxado && (
         <p className="alert alert-info">
-          {somenteLeitura ? (
-            'Este extrato já foi enviado para a contabilidade — as classificações ficam só para consulta.'
-          ) : (
-            <>
-              Este extrato já foi puxado pro módulo Importação (status atual: {st.status}). Você ainda
-              pode ajustar as classificações aqui — elas seguem valendo pro arquivo do Domínio.
-            </>
-          )}
+          Este extrato já foi enviado para a contabilidade — as classificações ficam só para consulta.
         </p>
       )}
 
@@ -453,12 +447,6 @@ export function ClassificacaoRevisaoPage() {
         {!somenteLeitura && shown.length > 0 && (
           <p className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
             Digite as primeiras letras para escolher · <Kbd>Enter</Kbd> próximo · <Kbd>Shift</Kbd>+<Kbd>Enter</Kbd> anterior
-            {!ehCliente && (
-              <>
-                {' '}
-                · <Kbd>Ctrl</Kbd>+<Kbd>S</Kbd> salva
-              </>
-            )}
           </p>
         )}
       </div>
@@ -571,12 +559,14 @@ export function ClassificacaoRevisaoPage() {
           isDirty ? (
             <span className="flex items-center gap-2 font-semibold text-amber-700">
               <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
-              {ehCliente
-                ? `${changes.length} alteração(ões) ainda não salva(s) — clique em "Salvar e aprovar" para salvar.`
-                : `${changes.length} alteração(ões) não salva(s) — salve antes de ir pra Importação.`}
+              {changes.length} alteração(ões) ainda não salva(s) — clique em "Salvar e aprovar" para salvar.
             </span>
           ) : stats.pend > 0 ? (
-            `${stats.pend} lançamento(s) ainda sem classificação.`
+            ehCliente ? (
+              `${stats.pend} lançamento(s) ainda sem classificação.`
+            ) : (
+              `${stats.pend} lançamento(s) ainda sem classificação — quem classifica é o cliente.`
+            )
           ) : (
             <span className="flex items-center gap-2 font-semibold text-green-700">
               <span className="h-2 w-2 rounded-full bg-green-500" />
@@ -598,20 +588,13 @@ export function ClassificacaoRevisaoPage() {
             Descartar
           </button>
         )}
-        {/* cliente salva pelo "Salvar e aprovar" */}
-        {!ehCliente && (
-          <button className={isDirty ? 'btn-primary' : 'btn-ghost'} onClick={onSave} disabled={!isDirty || save.isPending} title="Salvar (Ctrl+S)">
-            {save.isPending ? <Spinner /> : <IconSalvar className="h-4 w-4" />}
-            {save.isPending ? 'Salvando…' : isDirty ? `Salvar (${changes.length})` : 'Salvo'}
-          </button>
-        )}
+        {/* o cliente salva pelo "Salvar e aprovar"; o escritório não grava classificação */}
         {botaoAprovar}
         {/* puxar pra Importação é do escritório */}
         {!ehCliente && (
           <button
-            className={isDirty ? 'btn-ghost' : 'btn-primary'}
-            disabled={isDirty}
-            title={isDirty ? 'Salve as alterações primeiro' : 'Ir definir as contas contábeis'}
+            className="btn-primary"
+            title="Ir definir as contas contábeis"
             onClick={() => navigate(`/importar?puxar=${st.id}`)}
           >
             {jaPuxado ? 'Ir para Importação' : 'Puxar para Importação'}

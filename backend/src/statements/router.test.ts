@@ -1073,7 +1073,7 @@ describe('PATCH /statements/:id/classificacao', () => {
   const CL1 = '33333333-3333-3333-3333-333333333333';
 
   function appWithRpc(rpcData: unknown, txns: unknown[]) {
-    const { client, rpcOps } = makeFakeSupabase(
+    const { client, rpcOps, ops } = makeFakeSupabase(
       (op) => ({ data: op.table === 'transactions' ? txns : null, error: null }),
       () => ({ error: null }),
       () => ({ data: rpcData, error: null }),
@@ -1088,44 +1088,92 @@ describe('PATCH /statements/:id/classificacao', () => {
     });
     app.use('/statements', statementsRouter);
     app.use(errorHandler);
-    return { app, rpcOps };
+    return { app, rpcOps, ops };
   }
 
-  it('chama a RPC dedicada e devolve os lançamentos atualizados', async () => {
+  // só o cliente classifica (migration 0031): o login do escritório não grava
+  it('o escritório não grava classificação: 403, sem tocar no banco', async () => {
     const txns = [{ id: U1, ordem: 0, direction: 'saida', classificacao_id: CL1 }];
-    const { app, rpcOps } = appWithRpc(1, txns);
-    const res = await request(app)
-      .patch('/statements/s1/classificacao')
-      .send({ updates: [{ id: U1, classificacao_id: CL1 }] });
+    const { app, rpcOps, ops } = appWithRpc(1, txns);
+    for (const classificacao_id of [CL1, null]) {
+      const res = await request(app)
+        .patch('/statements/s1/classificacao')
+        .send({ updates: [{ id: U1, classificacao_id }] });
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatch(/só pelo cliente/);
+    }
+    expect(rpcOps).toHaveLength(0);
+    expect(ops).toHaveLength(0);
+  });
+});
 
-    expect(res.status).toBe(200);
-    expect(rpcOps[0]).toMatchObject({
-      fn: 'update_transactions_classificacao',
-      args: { p_statement: 's1' },
+describe('extrato com aprovação do cliente (migration 0031)', () => {
+  const aprovado = {
+    id: 's1',
+    client_id: 'c1',
+    client: { id: 'c1', razao_social: 'EMPRESA C1', cnpj: '11222333000181' },
+    hist_code_entrada: '138',
+    hist_code_saida: '186',
+    saldo_inicial: '0',
+    status: 'revisao',
+    storage_path: 'esc-1/s1/extrato.ofx',
+    aprovado_em: '2026-11-20T12:00:00Z',
+  };
+
+  function appAdmin(admin: boolean, stmt: Record<string, unknown> = aprovado) {
+    const { client, ops, storageOps, rpcOps } = makeFakeSupabase(
+      handlerFor({ 'statements.select': () => stmt }),
+      () => ({ error: null }),
+      (op) => ({ data: op.fn === 'sou_admin_do_escritorio' ? admin : null, error: null }),
+    );
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => {
+      req.auth = { userId: 'u1', email: 'a@b.com', token: 't' };
+      req.escritorioId = 'esc-1';
+      req.supabase = client;
+      next();
     });
-    expect(res.body.transactions).toEqual(txns);
-    expect(res.body.updated).toBe(1);
-  });
+    app.use('/statements', statementsRouter);
+    app.use(errorHandler);
+    return { app, ops, storageOps, rpcOps };
+  }
 
-  it('não mexe em conta_contabil/hist_code — só manda id + classificacao_id pra RPC', async () => {
-    const { app, rpcOps } = appWithRpc(1, []);
-    await request(app)
-      .patch('/statements/s1/classificacao')
-      .send({ updates: [{ id: U1, classificacao_id: null }] });
-    expect(rpcOps[0]?.args.p_updates).toEqual([{ id: U1, classificacao_id: null }]);
-  });
-
-  it('404 quando nenhum lançamento é atualizado', async () => {
-    const { app } = appWithRpc(0, []);
+  it('reimportar é recusado antes de ler o arquivo e sem apagar nenhum lançamento', async () => {
+    mockedParser.mockResolvedValue(parseResult);
+    const { app, ops, storageOps } = appAdmin(true);
     const res = await request(app)
-      .patch('/statements/s1/classificacao')
-      .send({ updates: [{ id: U1, classificacao_id: null }] });
-    expect(res.status).toBe(404);
+      .post('/statements/s1/reimport')
+      .attach('file', Buffer.from('OFXHEADER:100\n<OFX></OFX>'), 'novo.ofx');
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/já aprovou classificações/);
+    expect(mockedParser).not.toHaveBeenCalled();
+    expect(storageOps).toHaveLength(0);
+    expect(ops.some((o) => o.table === 'transactions')).toBe(false);
   });
 
-  it('400 se updates vazio', async () => {
-    const { app } = appWithRpc(0, []);
-    const res = await request(app).patch('/statements/s1/classificacao').send({ updates: [] });
-    expect(res.status).toBe(400);
+  it('excluir: quem não administra o escritório é recusado, sem apagar o arquivo nem o extrato', async () => {
+    const { app, ops, storageOps } = appAdmin(false);
+    const res = await request(app).delete('/statements/s1');
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/só quem administra o escritório/);
+    expect(storageOps).toHaveLength(0);
+    expect(ops.some((o) => o.verb === 'delete')).toBe(false);
+  });
+
+  it('excluir: o administrador consegue', async () => {
+    const { app, ops, storageOps } = appAdmin(true);
+    const res = await request(app).delete('/statements/s1');
+    expect(res.status).toBe(204);
+    expect(storageOps).toEqual([{ bucket: 'statements', action: 'remove', paths: ['esc-1/s1/extrato.ofx'] }]);
+    expect(ops.some((o) => o.table === 'statements' && o.verb === 'delete')).toBe(true);
+  });
+
+  it('excluir extrato sem aprovação segue liberado pra equipe toda (nem pergunta quem é administrador)', async () => {
+    const { app, ops, rpcOps } = appAdmin(false, { ...aprovado, aprovado_em: null });
+    const res = await request(app).delete('/statements/s1');
+    expect(res.status).toBe(204);
+    expect(rpcOps).toHaveLength(0);
+    expect(ops.some((o) => o.table === 'statements' && o.verb === 'delete')).toBe(true);
   });
 });

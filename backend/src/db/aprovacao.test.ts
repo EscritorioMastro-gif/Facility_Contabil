@@ -115,21 +115,20 @@ describe('migration 0026 — aprovação das classificações pelo cliente', () 
     await como(db, ESC, () => db.query(`update public.transactions set conta_contabil = '1101' where id = $1`, [T1]));
     expect((await extrato(S_OK)).classificacao_alterada_em).toBeNull();
 
+    // quem grava classificação é só o portal do cliente (migration 0031)
+    const peloPortal = (id: string, k: string) =>
+      como(db, 'service_role', () =>
+        db.query(`select public.update_transactions_classificacao_portal($1, $2::jsonb)`, [
+          S_OK,
+          JSON.stringify([{ id, classificacao_id: k }]),
+        ]),
+      );
+
     // salvar a mesma classificação de novo também não conta
-    await como(db, ESC, () =>
-      db.query(`select public.update_transactions_classificacao($1, $2::jsonb)`, [
-        S_OK,
-        JSON.stringify([{ id: T2, classificacao_id: K_FORN }]),
-      ]),
-    );
+    await peloPortal(T2, K_FORN);
     expect((await extrato(S_OK)).classificacao_alterada_em).toBeNull();
 
-    await como(db, ESC, () =>
-      db.query(`select public.update_transactions_classificacao($1, $2::jsonb)`, [
-        S_OK,
-        JSON.stringify([{ id: T3, classificacao_id: K_ALUGUEL }]),
-      ]),
-    );
+    await peloPortal(T3, K_ALUGUEL);
     const s = await extrato(S_OK);
     expect(s.classificacao_alterada_em).not.toBeNull();
     expect(new Date(s.classificacao_alterada_em!).getTime()).toBeGreaterThan(new Date(s.aprovado_em!).getTime());

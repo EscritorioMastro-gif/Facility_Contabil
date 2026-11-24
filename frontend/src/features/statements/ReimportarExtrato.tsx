@@ -12,24 +12,32 @@ const ACCEPT = '.pdf,.ofx,.qfx,.csv,.txt,.xls,.xlsx';
  * Troca o arquivo de uma importação existente. Substitui os lançamentos e volta
  * o extrato pra "em revisão". Cliente, lote e saldo inicial são mantidos.
  * Importação de planilha Excel (colunas escolhidas na mão) não reimporta — a
- * leitura automática não sabe as colunas.
+ * leitura automática não sabe as colunas. Extrato que o cliente já aprovou
+ * também não: trocar o arquivo apagaria o que ele classificou (migration 0031).
  */
 export function ReimportarExtrato({
   statementId,
   qtd,
   as = 'link',
   excel = false,
+  aprovado = false,
 }: {
   statementId: string;
   qtd: number;
   as?: 'link' | 'button';
   excel?: boolean;
+  /** o cliente já aprovou classificações deste extrato */
+  aprovado?: boolean;
 }) {
-  if (excel) {
+  if (excel || aprovado) {
     return (
       <span
         className={`cursor-help text-slate-400 ${as === 'button' ? 'btn border-brand-200 bg-white/70' : ''}`}
-        title="Importação de planilha Excel: para trocar a planilha, faça uma nova importação Excel."
+        title={
+          aprovado
+            ? 'O cliente já aprovou classificações deste extrato — trocar o arquivo apagaria o que ele classificou. Se o arquivo está errado, envie o certo como um extrato novo.'
+            : 'Importação de planilha Excel: para trocar a planilha, faça uma nova importação Excel.'
+        }
       >
         reimportar
       </span>

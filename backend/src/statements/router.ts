@@ -2,11 +2,10 @@ import { Router } from 'express';
 import multer from 'multer';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { LIMITE_LINHAS, emLotes, lerTodas, mapPgrstError } from '../lib/pgrst.js';
-import { badRequest, HttpError, notFound } from '../lib/httpError.js';
+import { badRequest, forbidden, HttpError, notFound } from '../lib/httpError.js';
 import { logger } from '../lib/logger.js';
-import { escritorioDe } from '../lib/escritorio.js';
+import { escritorioDe, souAdminDoEscritorio } from '../lib/escritorio.js';
 import {
-  bulkUpdateClassificacaoSchema,
   bulkUpdateTransactionsSchema,
   classificarStatementSchema,
   createStatementExcelSchema,
@@ -36,6 +35,22 @@ const STMT_COLS =
   'id, client_id, arquivo_nome, storage_path, formato, banco_id, conta_ofx, period_start, period_end, banco_conta_contabil, hist_code_entrada, hist_code_saida, lote_numero, saldo_inicial, saldo_final, complemento_modo, status, origem_modulo, excel_mapeamento, erro_msg, totais, created_at, updated_at, aprovado_em, aprovado_por_email, aprovado_qtd, aprovado_pendentes, classificacao_alterada_em, titular_doc, conta_chave, conferencia';
 const TXN_COLS =
   'id, ordem, data, descricao_raw, valor, direction, conta_contabil, hist_code, hist_complemento, cod_complemento_hist, ignorado, regra_id, origem_preenchimento, classificacao_id, classificacao_origem, aprovado_classificacao_id';
+
+/**
+ * Só o cliente classifica (pedido de 2026-11-24, migration 0031): o login do
+ * escritório — administrador incluso — consulta as classificações, mas não
+ * grava, não troca o arquivo de um extrato que o cliente já aprovou (apagaria o
+ * que ele classificou) e só o administrador exclui extrato aprovado (o
+ * histórico de aprovações vai junto). O banco recusa o mesmo por conta própria.
+ */
+const SO_O_CLIENTE_CLASSIFICA =
+  'A classificação é feita só pelo cliente, no acesso dele — o escritório só consulta. ' +
+  'Se alguma estiver errada, peça ao cliente para corrigir e aprovar de novo.';
+const REIMPORTAR_APROVADO =
+  'O cliente já aprovou classificações deste extrato — trocar o arquivo apagaria o que ele classificou. ' +
+  'Se o arquivo está errado, envie o certo como um extrato novo.';
+const EXCLUIR_APROVADO =
+  'Este extrato tem classificações aprovadas pelo cliente — só quem administra o escritório (Cadastros → Equipe) pode excluir.';
 
 /** Soma líquida (em centavos) de TODOS os lançamentos — inativados inclusos. */
 function movimentoCents(txns: Array<{ direction: string; valor: string | number }>): number {
@@ -643,12 +658,14 @@ statementsRouter.post('/:id/reimport', upload.single('file'), async (req, res, n
     const { data: stmt, error: sErr } = await supabase
       .from('statements')
       .select(
-        'id, client_id, hist_code_entrada, hist_code_saida, saldo_inicial, status, excel_mapeamento, client:clients(id, razao_social, cnpj)',
+        'id, client_id, hist_code_entrada, hist_code_saida, saldo_inicial, status, excel_mapeamento, aprovado_em, client:clients(id, razao_social, cnpj)',
       )
       .eq('id', statementId)
       .maybeSingle();
     if (sErr) throw mapPgrstError(sErr, 'buscar importação');
     if (!stmt) throw notFound('Importação não encontrada');
+    // reimportar apaga os lançamentos e recria: levaria junto o que o cliente classificou e aprovou
+    if (stmt.aprovado_em) throw forbidden(REIMPORTAR_APROVADO);
     // A leitura automática não sabe as colunas escolhidas na mão — numa planilha
     // de controle do cliente ela adivinharia errado sem avisar.
     if (stmt.excel_mapeamento) {
@@ -1071,33 +1088,10 @@ statementsRouter.get('/:id/classificacao/sugestoes', async (req, res, next) => {
 });
 
 // --------------------------------------------------------------------------- #
-// PATCH /:id/classificacao  — edição em lote da tela do módulo Classificação
-// (só a categoria do lançamento; não mexe em conta/histórico nem em totais).
+// PATCH /:id/classificacao  — o escritório NÃO grava classificação: só o
+// cliente, pelo portal (portal/extratos.ts). Ver SO_O_CLIENTE_CLASSIFICA.
 // --------------------------------------------------------------------------- #
-statementsRouter.patch('/:id/classificacao', async (req, res, next) => {
-  try {
-    const supabase = db(req);
-    const statementId = req.params.id;
-    const { updates } = bulkUpdateClassificacaoSchema.parse(req.body);
-
-    const { data: affected, error } = await supabase.rpc('update_transactions_classificacao', {
-      p_statement: statementId,
-      p_updates: updates,
-    });
-    if (error) throw mapPgrstError(error, 'salvar classificações');
-    if (!affected) throw notFound('Nenhum lançamento atualizado (importação não encontrada?)');
-
-    const txns = await lerTodas(
-      (de, ate) =>
-        supabase.from('transactions').select(TXN_COLS).eq('statement_id', statementId).order('ordem').range(de, ate),
-      'recarregar lançamentos',
-    );
-
-    res.json({ transactions: txns, updated: affected });
-  } catch (err) {
-    next(err);
-  }
-});
+statementsRouter.patch('/:id/classificacao', (_req, _res, next) => next(forbidden(SO_O_CLIENTE_CLASSIFICA)));
 
 // --------------------------------------------------------------------------- #
 // PATCH /:id  — cabeçalho
@@ -1149,10 +1143,12 @@ statementsRouter.delete('/:id', async (req, res, next) => {
     const supabase = db(req);
     const { data: stmt } = await supabase
       .from('statements')
-      .select('id, storage_path')
+      .select('id, storage_path, aprovado_em')
       .eq('id', req.params.id)
       .maybeSingle();
     if (!stmt) throw notFound('Importação não encontrada');
+    // antes de apagar o arquivo: extrato aprovado pelo cliente só o administrador exclui
+    if (stmt.aprovado_em && !(await souAdminDoEscritorio(supabase))) throw forbidden(EXCLUIR_APROVADO);
 
     if (stmt.storage_path) {
       await supabase.storage.from(BUCKET).remove([stmt.storage_path as string]);

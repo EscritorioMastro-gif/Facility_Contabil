@@ -7,10 +7,13 @@ import { IconRaio, Spinner } from '@/components/icons';
 import { Ajuda, Etapas, PageHeader, PassoAjuda, Secao } from '@/components/ui';
 import { ETAPAS_CLASSIFICACAO } from '@/lib/etapas';
 import type { RespostasTravas } from '@/features/statements/travas';
+import { useAuth } from '@/auth/useAuth';
 import { useCreateStatementClassificar } from './api';
 
 export function ClassificarPage() {
   const navigate = useNavigate();
+  // só o cliente classifica (migration 0031): o escritório envia o extrato e consulta
+  const { ehCliente } = useAuth();
   const { data: clients, isLoading: loadingClients } = useClients({ ativo: 'true' });
   const createMut = useCreateStatementClassificar();
 
@@ -39,8 +42,12 @@ export function ClassificarPage() {
   return (
     <section className="space-y-6">
       <PageHeader
-        titulo="Classificar extrato"
-        descricao="Importe o extrato e categorize cada lançamento (água, energia, telefone, recebimento de clientes…). Depois o escritório puxa o extrato já classificado para a contabilidade."
+        titulo={ehCliente ? 'Classificar extrato' : 'Enviar extrato para classificar'}
+        descricao={
+          ehCliente
+            ? 'Importe o extrato e categorize cada lançamento (água, energia, telefone, recebimento de clientes…). Depois o escritório puxa o extrato já classificado para a contabilidade.'
+            : 'Envie o extrato do cliente. Quem categoriza cada lançamento e aprova é o cliente, no acesso dele — o escritório consulta e depois puxa o extrato já classificado para a contabilidade.'
+        }
       >
         <Etapas etapas={ETAPAS_CLASSIFICACAO} atual={0} />
       </PageHeader>
@@ -113,8 +120,16 @@ export function ClassificarPage() {
         <Ajuda>
           <PassoAjuda n={1}>Escolha a empresa e arraste o extrato do mês (PDF, OFX, CSV, XLS ou XLSX).</PassoAjuda>
           <PassoAjuda n={2}>
-            O que a memória já conhece vem classificado; o resto você escolhe com o teclado — <b>Enter</b> desce para o
-            próximo lançamento.
+            {ehCliente ? (
+              <>
+                O que a memória já conhece vem classificado; o resto você escolhe com o teclado — <b>Enter</b> desce
+                para o próximo lançamento.
+              </>
+            ) : (
+              <>
+                O que a memória já conhece vem classificado; o resto <b>só o cliente classifica</b>, no acesso dele.
+              </>
+            )}
           </PassoAjuda>
           <PassoAjuda n={3}>O cliente confere e aprova; o escritório puxa para a Importação e gera o arquivo do Domínio.</PassoAjuda>
         </Ajuda>

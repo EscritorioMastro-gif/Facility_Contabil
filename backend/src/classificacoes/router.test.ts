@@ -133,6 +133,38 @@ describe('classificacoesRouter — lista própria', () => {
     expect(t.classificacoes!.every((c) => c.ativo === false)).toBe(true);
   });
 
+  // migration 0031: renomear mudaria o que o cliente aprovou sem tocar no lançamento
+  it('PATCH /:id não renomeia classificação que está em lançamento aprovado pelo cliente (no grupo todo)', async () => {
+    const t = banco({
+      classificacoes: [
+        { id: CL_1, client_id: CID, direction: 'saida', nome: 'PRO-LABORE', ativo: true },
+        { id: 'c-b', client_id: CID_B, direction: 'saida', nome: 'PRO-LABORE', ativo: true },
+      ],
+      // o cliente aprovou um lançamento da OUTRA empresa do login com ela
+      transactions: [{ id: 't1', classificacao_id: 'c-b', aprovado_classificacao_id: 'c-b' }],
+    });
+    const { app } = appBanco(t);
+    const ren = await request(app).patch(`/classificacoes/${CL_1}`).send({ nome: 'DISTRIBUIÇÃO DE LUCROS' });
+    expect(ren.status).toBe(403);
+    expect(ren.body.error).toMatch(/aprovados pelo cliente/);
+    expect(nomes(t, CID)).toEqual(['PRO-LABORE']);
+    expect(nomes(t, CID_B)).toEqual(['PRO-LABORE']);
+
+    // desativar continua podendo
+    expect((await request(app).patch(`/classificacoes/${CL_1}`).send({ ativo: false })).status).toBe(200);
+    expect(t.classificacoes!.every((c) => c.ativo === false)).toBe(true);
+  });
+
+  it('PATCH /:id renomeia a que está em lançamento ainda não aprovado', async () => {
+    const t = banco({
+      classificacoes: [{ id: CL_1, client_id: CID_SO, direction: 'saida', nome: 'AGUA', ativo: true }],
+      transactions: [{ id: 't1', classificacao_id: CL_1, aprovado_classificacao_id: null }],
+    });
+    const { app } = appBanco(t);
+    expect((await request(app).patch(`/classificacoes/${CL_1}`).send({ nome: 'ÁGUA E ESGOTO' })).status).toBe(200);
+    expect(nomes(t, CID_SO)).toEqual(['ÁGUA E ESGOTO']);
+  });
+
   it('PATCH /:id 400 sem campos; 404 quando não existe', async () => {
     const { app } = appBanco(banco());
     expect((await request(app).patch(`/classificacoes/${CL_1}`).send({})).status).toBe(400);
@@ -152,6 +184,17 @@ describe('classificacoesRouter — lista própria', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ excluidas: 1, desativadas: 1 });
     expect(t.classificacoes).toEqual([expect.objectContaining({ id: 'c-b', ativo: false })]);
+  });
+
+  it('DELETE /:id só desativa a que o cliente aprovou num lançamento, mesmo sem lançamento com ela agora', async () => {
+    const t = banco({
+      classificacoes: [{ id: CL_1, client_id: CID_SO, direction: 'saida', nome: 'AGUA', ativo: true }],
+      transactions: [{ id: 't1', classificacao_id: null, aprovado_classificacao_id: CL_1 }],
+    });
+    const { app } = appBanco(t);
+    const res = await request(app).delete(`/classificacoes/${CL_1}`);
+    expect(res.body).toEqual({ excluidas: 0, desativadas: 1 });
+    expect(t.classificacoes).toEqual([expect.objectContaining({ id: CL_1, ativo: false })]);
   });
 
   it('DELETE /:id 404 quando não existe', async () => {

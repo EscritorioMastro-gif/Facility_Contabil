@@ -192,6 +192,7 @@ export function RevisaoPage() {
               qtd={transactions.length}
               as="button"
               excel={!!st.excel_mapeamento}
+              aprovado={!!st.aprovado_em}
             />
           </>
         }

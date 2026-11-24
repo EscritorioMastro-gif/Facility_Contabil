@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { mapPgrstError } from '../lib/pgrst.js';
-import { escritorioDe } from '../lib/escritorio.js';
+import { escritorioDe, souAdminDoEscritorio as souAdmin } from '../lib/escritorio.js';
 import { logger } from '../lib/logger.js';
 import { badRequest, forbidden, HttpError, notFound } from '../lib/httpError.js';
 import {
@@ -38,12 +38,6 @@ export const classificacoesRouter = Router();
 function db(req: { supabase?: SupabaseClient }): SupabaseClient {
   if (!req.supabase) throw new Error('supabase client ausente (middleware de auth?)');
   return req.supabase;
-}
-
-async function souAdmin(supabase: SupabaseClient): Promise<boolean> {
-  const { data, error } = await supabase.rpc('sou_admin_do_escritorio');
-  if (error) throw mapPgrstError(error, 'conferir se o login administra o escritório');
-  return data === true;
 }
 
 async function classificacaoPorId(supabase: SupabaseClient, id: string): Promise<Classificacao> {
