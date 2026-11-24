@@ -289,6 +289,27 @@ describe('GET /marketplaces/shopee/conferencia', () => {
     ]);
   });
 
+  it('período: pedidos criados entre duas datas (vários meses), em São Paulo', async () => {
+    const { app, ops } = appEscritorio();
+    const res = await request(app).get(`/marketplaces/shopee/conferencia?client_id=${C1}&escopo=periodo&de=2026-09-01&ate=2026-11-24`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ escopo: 'periodo', de: '2026-09-01', ate: '2026-11-24' });
+    expect(res.body.resumo.pedidos).toBe(5);
+    expect(ops.find((o) => o.table === 'marketplace_pedidos')!.rangeFilters).toEqual([
+      { op: 'gte', col: 'criado_em', val: '2026-09-01T00:00:00-03:00' },
+      { op: 'lte', col: 'criado_em', val: '2026-11-24T23:59:59.999-03:00' },
+    ]);
+  });
+
+  it('período sem data, ao contrário ou maior que um ano: 400', async () => {
+    const { app } = appEscritorio();
+    const url = (q: string) => `/marketplaces/shopee/conferencia?client_id=${C1}&escopo=periodo${q}`;
+    expect((await request(app).get(url('&de=2026-09-01'))).status).toBe(400);
+    expect((await request(app).get(url('&de=2026-11-24&ate=2026-09-01'))).body.error).toMatch(/inicial vem depois/);
+    expect((await request(app).get(url('&de=2025-01-01&ate=2026-11-24'))).body.error).toMatch(/366 dias/);
+    expect((await request(app).get(url('&de=2026-02-30&ate=2026-13-01'))).status).toBe(400);
+  });
+
   it('a devolução debitada a mais vem da carteira', async () => {
     const carteira = [{ pedido: 'P-PAGO', data: '2026-10-20T10:00:00-03:00', seq: 1, categoria: 'debito_devolucao', valor: '-80.00', saldo_apos: null }];
     const { app } = appEscritorio(banco({ carteira }));

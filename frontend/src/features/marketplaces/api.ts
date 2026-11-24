@@ -98,13 +98,24 @@ export type ResumoConferencia = {
 export type Conferencia = {
   escopo: Escopo['escopo'];
   mes: string | null;
+  de: string | null;
+  ate: string | null;
   tabela: { preenchida: boolean; por_email: string | null; em: string | null };
   resumo: ResumoConferencia;
   pedidos: PedidoConferido[];
 };
 
-/** Quais pedidos: os do mês, os pendentes sem chamado (180 dias) ou os de um chamado. */
-export type Escopo = { escopo: 'mes'; mes: string } | { escopo: 'pendentes' } | { escopo: 'chamado'; chamado_id: string };
+/** Quais pedidos: os do mês, os criados num período (datas), os pendentes sem chamado (180 dias) ou os de um chamado. */
+export type Escopo =
+  | { escopo: 'mes'; mes: string }
+  | { escopo: 'periodo'; de: string; ate: string }
+  | { escopo: 'pendentes' }
+  | { escopo: 'chamado'; chamado_id: string };
+
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+/** O escopo dá pra consultar? (mês e datas no formato, início antes do fim) */
+export const escopoValido = (e: Escopo) =>
+  e.escopo === 'mes' ? /^\d{4}-\d{2}$/.test(e.mes) : e.escopo === 'periodo' ? DATA.test(e.de) && DATA.test(e.ate) && e.de <= e.ate : true;
 
 export type Chamado = InfoChamado & {
   resolvido_por_email: string | null;
@@ -205,6 +216,10 @@ const CHAVE = ['marketplaces', 'shopee'] as const;
 export function conferenciaUrl(clientId: string, e: Escopo) {
   const p = new URLSearchParams({ client_id: clientId, escopo: e.escopo });
   if (e.escopo === 'mes') p.set('mes', e.mes);
+  if (e.escopo === 'periodo') {
+    p.set('de', e.de);
+    p.set('ate', e.ate);
+  }
   if (e.escopo === 'chamado') p.set('chamado_id', e.chamado_id);
   return `${BASE}/conferencia?${p}`;
 }
@@ -213,7 +228,7 @@ export function useConferenciaShopee(clientId: string, e: Escopo, enabled = true
   return useQuery({
     queryKey: [...CHAVE, 'conferencia', clientId, e],
     queryFn: () => api<Conferencia>(conferenciaUrl(clientId, e)),
-    enabled: enabled && !!clientId && (e.escopo !== 'mes' || /^\d{4}-\d{2}$/.test(e.mes)),
+    enabled: enabled && !!clientId && escopoValido(e),
   });
 }
 

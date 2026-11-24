@@ -11,6 +11,7 @@ import {
   useConferenciaShopee,
   useImportacoesShopee,
   useImportarShopee,
+  escopoValido,
   type Escopo,
   type Importado,
   type ParteTarifa,
@@ -23,7 +24,10 @@ import {
   devolucaoComProblema,
   hojeEmSaoPaulo,
   mesAnterior,
+  juntarPeriodos,
+  mesesAntes,
   nomeDoArquivo,
+  periodoDoMes,
   planilhaDoLote,
   precisaDeChamado,
   reais,
@@ -35,6 +39,13 @@ import {
 type Filtro = 'todos' | 'nao_pago' | 'tarifa' | 'devolucao' | 'frete' | 'aguardando' | 'pago' | 'outros';
 
 const TIPO: Record<TipoRelatorio, string> = { pedidos: 'Pedidos', renda: 'Minha renda', carteira: 'Carteira' };
+
+/** Atalhos do período (datas em São Paulo). */
+const ATALHOS: Array<{ rotulo: string; periodo: () => { de: string; ate: string } }> = [
+  { rotulo: 'Mês passado', periodo: () => periodoDoMes(mesAnterior()) },
+  { rotulo: 'Este mês', periodo: () => ({ de: periodoDoMes(hojeEmSaoPaulo().slice(0, 7)).de, ate: hojeEmSaoPaulo() }) },
+  { rotulo: 'Últimos 3 meses', periodo: () => ({ de: periodoDoMes(mesesAntes(hojeEmSaoPaulo().slice(0, 7), 2)).de, ate: hojeEmSaoPaulo() }) },
+];
 
 const filtrar = (p: PedidoConferido, f: Filtro) =>
   f === 'todos'
@@ -64,9 +75,11 @@ export function ConferenciaShopeePage() {
   useEffect(() => {
     if (!clientId && clients?.length === 1) setClientId(clients[0]!.id);
   }, [clients, clientId]);
-  const [modo, setModo] = useState<'mes' | 'pendentes'>('mes');
-  const [mes, setMes] = useState(mesAnterior());
-  const escopo: Escopo = modo === 'mes' ? { escopo: 'mes', mes } : { escopo: 'pendentes' };
+  const [modo, setModo] = useState<'periodo' | 'pendentes'>('periodo');
+  const [de, setDe] = useState(() => periodoDoMes(mesAnterior()).de);
+  const [ate, setAte] = useState(() => periodoDoMes(mesAnterior()).ate);
+  const escopo: Escopo = modo === 'periodo' ? { escopo: 'periodo', de, ate } : { escopo: 'pendentes' };
+  const periodoInvalido = modo === 'periodo' && !escopoValido(escopo);
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const { data, isLoading, error } = useConferenciaShopee(clientId, escopo);
   const { data: importacoes } = useImportacoesShopee(clientId);
@@ -74,7 +87,7 @@ export function ConferenciaShopeePage() {
   const [abrindo, setAbrindo] = useState(false);
   const [importando, setImportando] = useState(false);
   const [extrato, setExtrato] = useState<PedidoConferido | null>(null);
-  useEffect(() => setSelecionados(new Set()), [clientId, modo, mes]);
+  useEffect(() => setSelecionados(new Set()), [clientId, modo, de, ate]);
 
   const pedidos = useMemo(() => data?.pedidos ?? [], [data]);
   const conta = useMemo(() => {
@@ -146,16 +159,38 @@ export function ConferenciaShopeePage() {
             value={modo}
             onChange={setModo}
             options={[
-              { value: 'mes', label: 'Do mês' },
+              { value: 'periodo', label: 'Do período', title: 'Pedidos criados entre as duas datas' },
               { value: 'pendentes', label: 'Pendentes sem chamado', title: 'O que precisa de chamado nos últimos 180 dias e ainda não entrou em nenhum' },
             ]}
           />
         </div>
-        {modo === 'mes' && (
-          <label className="flex flex-col">
-            <span className="mb-1 text-xs text-slate-500">Mês dos pedidos</span>
-            <input className="input w-44" type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
-          </label>
+        {modo === 'periodo' && (
+          <>
+            <label className="flex flex-col">
+              <span className="mb-1 text-xs text-slate-500">Pedidos criados de</span>
+              <input className="input w-40" type="date" value={de} max={ate || undefined} onChange={(e) => setDe(e.target.value)} />
+            </label>
+            <label className="flex flex-col">
+              <span className="mb-1 text-xs text-slate-500">até</span>
+              <input className="input w-40" type="date" value={ate} min={de || undefined} onChange={(e) => setAte(e.target.value)} />
+            </label>
+            <div className="mb-1 flex flex-wrap gap-1">
+              {ATALHOS.map((a) => (
+                <button
+                  key={a.rotulo}
+                  type="button"
+                  className="btn-quiet btn-sm"
+                  onClick={() => {
+                    const p = a.periodo();
+                    setDe(p.de);
+                    setAte(p.ate);
+                  }}
+                >
+                  {a.rotulo}
+                </button>
+              ))}
+            </div>
+          </>
         )}
         {importacoes?.loja && (
           <span className="chip chip-slate mb-1.5" title="A loja da Shopee ligada a esta empresa — relatório de outra loja é recusado">
@@ -170,6 +205,8 @@ export function ConferenciaShopeePage() {
         <div className="card">
           <Vazio icone={<IconSacola className="h-6 w-6" />} titulo="Escolha a empresa para conferir os pedidos da Shopee" />
         </div>
+      ) : periodoInvalido ? (
+        <p className="alert alert-warn">Escolha as duas datas, com a inicial antes da final.</p>
       ) : isLoading ? (
         <div className="card">
           <CarregandoLinhas />
@@ -199,7 +236,7 @@ export function ConferenciaShopeePage() {
             <div className="card">
               <Vazio
                 icone={<IconSacola className="h-6 w-6" />}
-                titulo={modo === 'pendentes' ? 'Nada pendente sem chamado' : 'Nenhum pedido da Shopee neste mês'}
+                titulo={modo === 'pendentes' ? 'Nada pendente sem chamado' : 'Nenhum pedido da Shopee neste período'}
                 texto={
                   modo === 'pendentes'
                     ? 'Tudo o que precisava de chamado nos últimos 180 dias já está em algum chamado.'
@@ -484,18 +521,26 @@ function RelatoriosImportados({ itens }: { itens: Array<{ tipo: TipoRelatorio; p
       </p>
     );
   }
-  const ultimo = (t: TipoRelatorio) => itens.find((i) => i.tipo === t);
   return (
     <div className="flex flex-wrap gap-2 text-xs">
       {(['pedidos', 'renda', 'carteira'] as TipoRelatorio[]).map((t) => {
-        const u = ultimo(t);
+        const doTipo = itens.filter((i) => i.tipo === t);
+        // o que já está coberto, somando todas as importações (períodos que se emendam viram um só)
+        const periodos = juntarPeriodos(
+          doTipo.filter((i) => i.periodo_de && i.periodo_ate).map((i) => ({ de: i.periodo_de!, ate: i.periodo_ate! })),
+        );
+        const u = doTipo[0];
         return (
           <span
             key={t}
-            className={`chip ${u ? 'chip-slate' : 'chip-amber'}`}
-            title={u ? `Importado em ${dataCurta(u.importado_em)} por ${u.importado_por_email}` : 'Ainda não importado'}
+            className={`chip ${u ? (periodos.length > 1 ? 'chip-amber' : 'chip-slate') : 'chip-amber'}`}
+            title={
+              u
+                ? `${doTipo.length} importação(ões); a última em ${dataCurta(u.importado_em)} por ${u.importado_por_email}${periodos.length > 1 ? ' — há um buraco entre os períodos' : ''}`
+                : 'Ainda não importado'
+            }
           >
-            {TIPO[t]}: {u ? `${dataCurta(u.periodo_de)} a ${dataCurta(u.periodo_ate)}` : 'falta importar'}
+            {TIPO[t]}: {u ? periodos.map((p) => `${dataCurta(p.de)} a ${dataCurta(p.ate)}`).join(' · ') || 'sem período' : 'falta importar'}
           </span>
         );
       })}

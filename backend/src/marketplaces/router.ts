@@ -4,6 +4,7 @@
  *   POST   /shopee/importar                (multipart: client_id + arquivos[])  lê e grava os relatórios
  *   GET    /shopee/importacoes?client_id                          o que já foi importado e a loja ligada
  *   GET    /shopee/conferencia?client_id&escopo=mes&mes=AAAA-MM   pedidos do mês (data do pedido)
+ *          ...&escopo=periodo&de=AAAA-MM-DD&ate=AAAA-MM-DD        pedidos criados no período (até 366 dias)
  *          ...&escopo=pendentes                                   o que precisa de chamado e ainda não entrou em nenhum (180 dias)
  *          ...&escopo=chamado&chamado_id=                         os pedidos de um chamado
  *   GET    /shopee/custos?client_id&de=AAAA-MM&ate=AAAA-MM        custos do mês a mês (carteira)
@@ -50,6 +51,8 @@ const uuid = z.string().uuid();
 const DIAS_PENDENTES = 180;
 /** Custos: no máximo 12 meses por consulta. */
 const MESES_CUSTOS = 12;
+/** Conferência por período: no máximo um ano de pedidos por consulta. */
+const DIAS_PERIODO = 366;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -308,14 +311,25 @@ async function conferirPedidos(sb: SupabaseClient, clientId: string, brutos: Rec
 // Validação
 // --------------------------------------------------------------------------- #
 const mesFmt = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'mês no formato AAAA-MM');
+const diaFmt = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'data no formato AAAA-MM-DD');
+/** Dias entre duas datas AAAA-MM-DD (as duas contam). */
+const diasEntre = (de: string, ate: string) => Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86_400_000) + 1;
 const conferenciaQuery = z
   .object({
     client_id: z.string().uuid(),
-    escopo: z.enum(['mes', 'pendentes', 'chamado']).default('mes'),
+    escopo: z.enum(['mes', 'periodo', 'pendentes', 'chamado']).default('mes'),
     mes: mesFmt.optional(),
+    de: diaFmt.optional(),
+    ate: diaFmt.optional(),
     chamado_id: z.string().uuid().optional(),
   })
   .refine((q) => q.escopo !== 'mes' || !!q.mes, 'mês no formato AAAA-MM')
+  .refine((q) => q.escopo !== 'periodo' || (!!q.de && !!q.ate), 'informe as datas de início e fim')
+  .refine((q) => q.escopo !== 'periodo' || !q.de || !q.ate || q.de <= q.ate, 'a data inicial vem depois da final')
+  .refine(
+    (q) => q.escopo !== 'periodo' || !q.de || !q.ate || diasEntre(q.de, q.ate) <= DIAS_PERIODO,
+    `no máximo ${DIAS_PERIODO} dias por vez`,
+  )
   .refine((q) => q.escopo !== 'chamado' || !!q.chamado_id, 'escolha o chamado');
 const custosQuery = z
   .object({ client_id: z.string().uuid(), de: mesFmt, ate: mesFmt })
@@ -451,12 +465,15 @@ function rotas(acesso: (req: Request) => Promise<Acesso>) {
       if (!q.success) throw badRequest(primeiroErro(q.error, 'Filtro inválido'));
       const a = await acesso(req);
       const empresa = await exigirEmpresa(a, q.data.client_id);
-      const { escopo, mes, chamado_id } = q.data;
+      const { escopo, mes, chamado_id, de: periodoDe, ate: periodoAte } = q.data;
 
       const brutos = await lerTodas<Record<string, unknown>>((de, ate) => {
         let qb = a.sb.from('marketplace_pedidos').select(COLS_PEDIDO).eq('client_id', empresa.id).eq('marketplace', MARKETPLACE);
         if (escopo === 'mes') {
           qb = qb.gte('criado_em', `${mes}-01T00:00:00-03:00`).lte('criado_em', `${ultimoDia(mes!)}T23:59:59.999-03:00`);
+        } else if (escopo === 'periodo') {
+          // data de criação do pedido, em São Paulo, com os dois dias inclusos
+          qb = qb.gte('criado_em', `${periodoDe}T00:00:00-03:00`).lte('criado_em', `${periodoAte}T23:59:59.999-03:00`);
         } else if (escopo === 'pendentes') {
           qb = qb.gte('criado_em', new Date(Date.now() - DIAS_PENDENTES * 24 * 60 * 60 * 1000).toISOString());
         } else {
@@ -477,6 +494,8 @@ function rotas(acesso: (req: Request) => Promise<Acesso>) {
       res.json({
         escopo,
         mes: mes ?? null,
+        de: periodoDe ?? null,
+        ate: periodoAte ?? null,
         tabela: { preenchida: tabela.linhas.length > 0, por_email: tabela.por_email, em: tabela.em },
         resumo,
         pedidos: conferidos.map((c, i) => {

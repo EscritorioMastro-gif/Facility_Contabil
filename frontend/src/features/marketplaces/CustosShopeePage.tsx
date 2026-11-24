@@ -277,10 +277,21 @@ function Cobrancas({ m }: { m: CustosMes }) {
 
 function Comparacao({ meses, total, sel }: { meses: CustosMes[]; total: CustosMes; sel: string }) {
   const media = total.total_custos / (total.total_custos + total.recebido || 1);
-  const linhas = [...meses, total];
+  // segue o mês escolhido em cima; "Período todo" mostra mês a mês e o total
+  const doMes = sel === 'total' ? null : meses.find((x) => x.mes === sel) ?? null;
+  const linhas = doMes ? [doMes] : [...meses, total];
+  const pagoMes = doMes ? doMes.total_custos / (doMes.total_custos + doMes.recebido || 1) : null;
   return (
     <div className="card p-5">
-      <h2 className="mb-1 text-sm font-semibold text-slate-800">Pago à Shopee × ficou para a loja</h2>
+      <h2 className="mb-1 text-sm font-semibold text-slate-800">
+        Pago à Shopee × ficou para a loja{doMes ? ` — ${rotuloMes(doMes.mes)}` : ', mês a mês'}
+      </h2>
+      {doMes && pagoMes !== null && meses.length > 1 && (
+        <p className="mb-2 text-xs text-slate-500">
+          Em {rotuloMes(doMes.mes)}, {pct(pagoMes)} ficou com a Shopee —{' '}
+          {Math.abs(pagoMes - media) < 0.0005 ? 'igual à' : pagoMes > media ? 'acima da' : 'abaixo da'} média do período ({pct(media)}).
+        </p>
+      )}
       <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-500">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" />
@@ -299,11 +310,10 @@ function Comparacao({ meses, total, sel }: { meses: CustosMes[]; total: CustosMe
         const p = x.total_custos;
         const r = x.recebido;
         const t = p + r || 1;
-        const ativo = sel === x.mes;
         return (
           <div
             key={x.mes}
-            className={`grid grid-cols-[70px_minmax(0,1fr)_170px] items-center gap-3 rounded-md px-1 py-1.5 ${ativo ? 'bg-slate-50' : ''}`}
+            className={`grid grid-cols-[70px_minmax(0,1fr)_170px] items-center gap-3 rounded-md px-1 py-1.5 ${x.mes === 'total' ? 'bg-slate-50' : ''}`}
             title={`Pago à Shopee ${reais(p)} · ficou para a loja ${reais(r)}`}
           >
             <span className="text-sm text-slate-700">{x.mes === 'total' ? 'Período' : rotuloMes(x.mes)}</span>

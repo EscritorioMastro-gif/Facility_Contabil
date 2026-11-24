@@ -29,6 +29,37 @@ export function mesAnterior(hoje = new Date()): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** "AAAA-MM" N meses antes. */
+export function mesesAntes(mes: string, n: number): string {
+  const [a, m] = mes.split('-').map(Number) as [number, number];
+  const d = new Date(Date.UTC(a, m - 1 - n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/** Primeiro e último dia do mês "AAAA-MM". */
+export function periodoDoMes(mes: string): { de: string; ate: string } {
+  const [a, m] = mes.split('-').map(Number) as [number, number];
+  const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+  return { de: `${mes}-01`, ate: `${mes}-${String(ultimo).padStart(2, '0')}` };
+}
+
+/**
+ * Junta períodos que se tocam ou se sobrepõem (um dia de folga conta como
+ * emendado): [01/09–31/10, 01/11–24/11] → [01/09–24/11].
+ */
+export function juntarPeriodos(periodos: Array<{ de: string; ate: string }>): Array<{ de: string; ate: string }> {
+  const dia = (s: string) => Date.parse(`${s}T00:00:00Z`);
+  const ordem = [...periodos].sort((x, y) => x.de.localeCompare(y.de));
+  const out: Array<{ de: string; ate: string }> = [];
+  for (const p of ordem) {
+    const u = out[out.length - 1];
+    if (u && dia(p.de) <= dia(u.ate) + 86_400_000) {
+      if (p.ate > u.ate) u.ate = p.ate;
+    } else out.push({ ...p });
+  }
+  return out;
+}
+
 export const SITUACAO: Record<SituacaoPagamento, { texto: string; cls: string }> = {
   pago: { texto: 'pago', cls: 'chip-green' },
   aguardando: { texto: 'aguardando', cls: 'chip-sky' },
