@@ -82,6 +82,7 @@ export function ModalAprovacao({
   qtd,
   novos,
   pendentes,
+  daMemoria = 0,
   email,
   busy,
   erro,
@@ -97,6 +98,8 @@ export function ModalAprovacao({
   novos: number;
   /** lançamentos ainda sem classificação (ficam pra próxima aprovação) */
   pendentes: number;
+  /** classificados pela memória (ou sugestão) que o cliente não trocou — aprovar é o aceite (migration 0033) */
+  daMemoria?: number;
   email: string | null;
   busy: boolean;
   erro: string | null;
@@ -133,6 +136,13 @@ export function ModalAprovacao({
         {jaAprovou && novos > 0 && novos < qtd && (
           <p className="text-xs text-slate-600">
             Desde a sua última aprovação: {plural(novos, 'lançamento novo ou alterado', 'lançamentos novos ou alterados')}.
+          </p>
+        )}
+        {daMemoria > 0 && (
+          <p className="text-xs text-slate-600">
+            {daMemoria === 1
+              ? '1 dessas classificações veio da memória e você não trocou: ao aprovar, ela fica valendo como está.'
+              : `${daMemoria} dessas classificações vieram da memória e você não trocou: ao aprovar, elas ficam valendo como estão.`}
           </p>
         )}
         {parcial && (

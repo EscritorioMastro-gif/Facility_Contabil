@@ -365,6 +365,13 @@ export function ClassificacaoRevisaoPage() {
               (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente.
             </span>
           )}
+          {!somenteLeitura && (
+            <span>
+              {' '}
+              Se alguma estiver errada, troque — ao <b>salvar e aprovar</b>, as que ficarem como estão são aprovadas
+              assim.
+            </span>
+          )}
         </p>
       )}
 
@@ -383,12 +390,6 @@ export function ClassificacaoRevisaoPage() {
               {memoria.buscando && <Spinner />}
               {memoria.buscando ? 'Lendo a memória…' : 'Preencher pela memória'}
             </button>
-            {stats.sugestoes.length > 0 && (
-              <button className="btn-ghost btn-sm h-9" onClick={() => aceitar(stats.sugestoes)}>
-                <IconCheck className="h-4 w-4 text-green-600" />
-                Aceitar as sugestões ({stats.sugestoes.length})
-              </button>
-            )}
           </div>
           {memoria.msg && <p className="text-xs text-slate-600">{memoria.msg}</p>}
 
@@ -530,10 +531,7 @@ export function ClassificacaoRevisaoPage() {
                           vazio && !somenteLeitura ? 'border-amber-300 bg-amber-50/40 text-slate-500' : ''
                         }`}
                       />
-                      <SeloMemoria
-                        origem={origem}
-                        onAceitar={somenteLeitura ? undefined : () => aceitar([txn.id])}
-                      />
+                      <SeloMemoria origem={origem} />
                       <SeloAprovado aprovado={txn.aprovado_classificacao_id ?? null} atual={get(txn.id)} />
                     </div>
                   </td>
@@ -609,6 +607,7 @@ export function ClassificacaoRevisaoPage() {
         qtd={stats.classificados}
         novos={stats.novos}
         pendentes={stats.pend}
+        daMemoria={stats.daMemoria + stats.sugestoes.length}
         email={user?.email ?? null}
         busy={ocupado}
         erro={erroAprovacao}
@@ -629,12 +628,17 @@ export function ClassificacaoRevisaoPage() {
   );
 }
 
-function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAceitar?: () => void }) {
+/**
+ * De onde veio a classificação: a memória pôs e ninguém conferiu ainda. Não há
+ * botão de aceitar — "Salvar e aprovar" é o aceite, e ao aprovar o selo some e
+ * fica só o "aprovado" (migration 0033).
+ */
+function SeloMemoria({ origem }: { origem: OrigemMemoria | null }) {
   if (origem === 'memoria') {
     return (
       <span
         className="chip chip-green"
-        title="Classificado pela memória: essa descrição já foi classificada assim antes"
+        title="Classificado pela memória: essa descrição já foi classificada assim antes. Se estiver errada, troque; ao salvar e aprovar fica valendo como está"
       >
         memória
       </span>
@@ -642,24 +646,11 @@ function SeloMemoria({ origem, onAceitar }: { origem: OrigemMemoria | null; onAc
   }
   if (origem === 'conferir') {
     return (
-      <span className="flex items-center gap-1 whitespace-nowrap">
-        <span
-          className="chip chip-amber"
-          title="Sugestão para conferir: essa descrição já teve classificações diferentes (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente"
-        >
-          sugestão
-        </span>
-        {onAceitar && (
-          <button
-            type="button"
-            className="grid h-6 w-6 place-items-center rounded-lg border border-amber-300 bg-white text-amber-700 transition-colors hover:bg-amber-100"
-            title="Está certa — aceitar a sugestão"
-            aria-label="Aceitar a sugestão"
-            onClick={onAceitar}
-          >
-            <IconCheck className="h-3.5 w-3.5" strokeWidth={2.5} />
-          </button>
-        )}
+      <span
+        className="chip chip-amber whitespace-nowrap"
+        title="Sugestão para conferir: essa descrição já teve classificações diferentes (o sistema pôs a mais usada) ou foi classificada assim em outra empresa do mesmo cliente. Se estiver errada, troque; ao salvar e aprovar fica valendo como está"
+      >
+        sugestão
       </span>
     );
   }
