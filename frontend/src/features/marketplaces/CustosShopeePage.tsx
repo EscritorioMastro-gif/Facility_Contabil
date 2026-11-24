@@ -280,18 +280,35 @@ function Comparacao({ meses, total, sel }: { meses: CustosMes[]; total: CustosMe
   // segue o mês escolhido em cima; "Período todo" mostra mês a mês e o total
   const doMes = sel === 'total' ? null : meses.find((x) => x.mes === sel) ?? null;
   const linhas = doMes ? [doMes] : [...meses, total];
-  const pagoMes = doMes ? doMes.total_custos / (doMes.total_custos + doMes.recebido || 1) : null;
+  // o mês de referência: o escolhido em cima ou, no período todo, o último
+  const ref = doMes ?? meses[meses.length - 1]!;
+  const pagoRef = ref.total_custos / (ref.total_custos + ref.recebido || 1);
+  const mediaMensal = total.total_custos / (meses.length || 1);
+  const dif = ref.total_custos - mediaMensal;
+  const emAndamento = ref.mes === mesDeHoje();
   return (
     <div className="card p-5">
-      <h2 className="mb-1 text-sm font-semibold text-slate-800">
+      <h2 className="mb-3 text-sm font-semibold text-slate-800">
         Pago à Shopee × ficou para a loja{doMes ? ` — ${rotuloMes(doMes.mes)}` : ', mês a mês'}
       </h2>
-      {doMes && pagoMes !== null && meses.length > 1 && (
-        <p className="mb-2 text-xs text-slate-500">
-          Em {rotuloMes(doMes.mes)}, {pct(pagoMes)} ficou com a Shopee —{' '}
-          {Math.abs(pagoMes - media) < 0.0005 ? 'igual à' : pagoMes > media ? 'acima da' : 'abaixo da'} média do período ({pct(media)}).
-        </p>
-      )}
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+        <Cartao
+          rotulo={doMes ? `Custo de ${rotuloMes(ref.mes)}` : `Custo do último mês (${rotuloMes(ref.mes)})`}
+          valor={reais(ref.total_custos)}
+          detalhe={`${pct(pagoRef)} do que entrou · ${inteiro(ref.pedidos)} pedidos${emAndamento ? ' · mês em andamento' : ''}`}
+        />
+        <Cartao
+          rotulo="Média do período, por mês"
+          valor={reais(mediaMensal)}
+          detalhe={`${pct(media)} do que entrou · ${meses.length} ${meses.length === 1 ? 'mês' : 'meses'} · total ${reais(total.total_custos)}`}
+        />
+        {/* a porcentagem é a comparação justa (o mês em andamento ainda vai somar reais) */}
+        <Cartao
+          rotulo={`${rotuloMes(ref.mes)} × média`}
+          valor={Math.abs(pagoRef - media) < 0.0005 ? 'igual à média' : `${pct(Math.abs(pagoRef - media))} ${pagoRef > media ? 'acima' : 'abaixo'}`}
+          detalhe={`${pct(pagoRef)} × ${pct(media)} · em reais: ${Math.abs(dif) < 0.005 ? 'igual' : `${dif > 0 ? '+' : '−'} ${reais(Math.abs(dif))}`}${emAndamento ? ' (o mês ainda não terminou)' : ' que a média mensal'}`}
+        />
+      </div>
       <div className="mb-3 flex flex-wrap gap-4 text-xs text-slate-500">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-sky-600" />
