@@ -922,6 +922,78 @@ describe('POST /statements/:id/export', () => {
     // registro 01 + (02 e 03) por lançamento + 99
     expect(res.headers['x-export-linhas']).toBe(String(1 + 2 * 1211 + 1));
   });
+
+  describe('saldo do cadastro do cliente (migration 0029)', () => {
+    const txnOk = {
+      ordem: 0,
+      data: '2026-07-10',
+      direction: 'entrada',
+      valor: '500.00',
+      conta_contabil: '272',
+      hist_code: '138',
+      descricao_raw: 'RECEBIMENTO',
+      hist_complemento: '',
+      ignorado: false,
+    };
+
+    function appComSaldo(rpc: () => { data?: unknown; error?: unknown }) {
+      const { client, rpcOps, ops } = makeFakeSupabase(
+        handlerFor({
+          'statements.select': () => stmtRow,
+          'transactions.select': () => [txnOk],
+          'export_files.insert': () => null,
+          'statements.update': () => ({ id: 's1', status: 'gerado' }),
+        }),
+        () => ({ error: null }),
+        rpc,
+      );
+      const app = express();
+      app.use((req, _res, next) => {
+        req.auth = { userId: 'u1', email: 'a@b.com', token: 't' };
+        req.escritorioId = 'esc-1';
+        req.supabase = client;
+        next();
+      });
+      app.use('/statements', statementsRouter);
+      app.use(errorHandler);
+      return { app, rpcOps, ops };
+    }
+
+    it('gerar o arquivo leva o saldo final do extrato pro cadastro e conta pra tela', async () => {
+      const { app, rpcOps, ops } = appComSaldo(() => ({
+        data: { atualizado: true, saldo_final: 1500, saldo: 1500, ate: '2026-07-31' },
+        error: null,
+      }));
+      const res = await request(app).post('/statements/s1/export');
+      expect(res.status).toBe(200);
+      expect(rpcOps).toEqual([{ fn: 'avancar_saldo_cliente', args: { p_statement: 's1' } }]);
+      expect(ops.some((o) => o.table === 'export_files' && o.verb === 'insert')).toBe(true);
+      expect(res.headers['x-saldo-cliente']).toBe('atualizado');
+      expect(res.headers['x-saldo-valor']).toBe('1500.00');
+      expect(res.headers['x-saldo-ate']).toBe('2026-07-31');
+    });
+
+    it('cadastro com saldo de um período mais novo: avisa que manteve', async () => {
+      const { app } = appComSaldo(() => ({
+        data: { atualizado: false, saldo_final: 1500, saldo: '2009.5', ate: '2026-09-30' },
+        error: null,
+      }));
+      const res = await request(app).post('/statements/s1/export');
+      expect(res.status).toBe(200);
+      expect(res.headers['x-saldo-cliente']).toBe('mantido');
+      expect(res.headers['x-saldo-valor']).toBe('2009.50');
+      expect(res.headers['x-saldo-ate']).toBe('2026-09-30');
+    });
+
+    it('falha ao gravar o saldo não segura o arquivo — avisa a tela', async () => {
+      const { app } = appComSaldo(() => ({ data: null, error: { message: 'boom', code: 'XX000' } }));
+      const res = await request(app).post('/statements/s1/export');
+      expect(res.status).toBe(200);
+      expect(res.headers['content-disposition']).toContain('.txt');
+      expect(res.headers['x-saldo-cliente']).toBe('erro');
+      expect(res.headers['x-saldo-valor']).toBeUndefined();
+    });
+  });
 });
 
 describe('PATCH /statements/:id/transactions', () => {

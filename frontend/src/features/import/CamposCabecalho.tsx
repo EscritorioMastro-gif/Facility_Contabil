@@ -1,4 +1,5 @@
 import { formatMoney } from '@/lib/format';
+import { origemDoSaldo } from '@/features/clients/saldo';
 import type { CabecalhoImportacao } from './useCabecalhoImportacao';
 
 /** Campos do cabeçalho da importação: cliente, conta do banco, lote, históricos e saldo inicial. */
@@ -102,8 +103,8 @@ export function CamposCabecalho({ cab }: { cab: CabecalhoImportacao }) {
         </div>
         <p className="hint">
           {selected
-            ? `Cadastro do cliente: ${formatMoney(Math.round(Number(selected.saldo_inicial ?? 0) * 100))}. Se o extrato começa com outro saldo, digite aqui — vale o que estiver neste campo.`
-            : 'Vem do cadastro do cliente; digite outro se o extrato começar com saldo diferente. Serve para conferir o saldo do fim do mês.'}
+            ? `Cadastro do cliente: ${formatMoney(Math.round(Number(selected.saldo_inicial ?? 0) * 100))}${origemDoSaldo(selected) ? ` (${origemDoSaldo(selected)})` : ''}. Se o extrato começa com outro saldo, digite aqui — vale o que estiver neste campo.`
+            : 'Vem do cadastro do cliente (o saldo final do último arquivo do Domínio gerado); digite outro se o extrato começar com saldo diferente.'}
         </p>
       </div>
     </>

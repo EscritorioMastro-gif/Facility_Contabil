@@ -8,6 +8,10 @@ export type Client = {
   hist_code_saida: string;
   conta_width: number;
   saldo_inicial: string;
+  /** fim do período do extrato cujo arquivo do Domínio definiu o saldo (null = digitado no cadastro) */
+  saldo_inicial_ate?: string | null;
+  /** quando esse arquivo foi gerado */
+  saldo_inicial_em?: string | null;
   ativo: boolean;
   observacoes: string | null;
   created_at: string;

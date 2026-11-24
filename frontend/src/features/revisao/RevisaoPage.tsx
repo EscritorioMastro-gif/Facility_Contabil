@@ -9,9 +9,10 @@ import { ETAPAS_IMPORTACAO } from '@/lib/etapas';
 import { useToast } from '@/lib/toast';
 import { useAtalhoSalvar } from '@/lib/useAtalhoSalvar';
 import { ApiError } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import type { Transaction } from '@/lib/types';
 import {
+  type SaldoDoCliente,
   useGenerateDominio,
   useSaveTransactions,
   useStatement,
@@ -25,6 +26,19 @@ import { TransactionRow } from './TransactionRow';
 import { useRevisaoDraft } from './useRevisaoDraft';
 
 type Filter = 'todas' | 'entrada' | 'saida' | 'pendentes' | 'conferir' | 'inativadas';
+
+/** O que gerar o arquivo fez com o saldo do cadastro do cliente, em uma frase. */
+function textoSaldoDoCliente(s: SaldoDoCliente | null): string | null {
+  if (!s) return null;
+  const valor = s.valor === null ? '' : formatMoney(Math.round(s.valor * 100));
+  if (s.situacao === 'atualizado') {
+    return `Saldo do cliente agora é ${valor}: é o saldo inicial do próximo extrato.`;
+  }
+  if (s.situacao === 'mantido') {
+    return `O saldo do cliente continua ${valor}: ele já vem de um extrato mais novo${s.ate ? ` (até ${formatDate(s.ate)})` : ''}.`;
+  }
+  return 'O saldo do cliente NÃO foi atualizado — confira o saldo no cadastro antes da próxima importação.';
+}
 
 export function RevisaoPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -127,8 +141,13 @@ export function RevisaoPage() {
       onSuccess: (r) =>
         toast({
           texto: 'Arquivo do Domínio gerado',
-          detalhe: `${r.filename} · ${r.linhas} linhas — importe em Utilitários → Importação → Lançamentos contábeis em lote.`,
-          duracao: 8000,
+          detalhe: [
+            `${r.filename} · ${r.linhas} linhas — importe em Utilitários → Importação → Lançamentos contábeis em lote.`,
+            textoSaldoDoCliente(r.saldo),
+          ]
+            .filter(Boolean)
+            .join(' '),
+          duracao: 10000,
         }),
     });
   }
@@ -313,7 +332,13 @@ export function RevisaoPage() {
           Arquivo <span className="font-mono">{gerar.data.filename}</span> gerado ({gerar.data.linhas}{' '}
           linhas) e baixado. Importe no Domínio: Utilitários → Importação → Lançamentos contábeis em
           lote.
+          {gerar.data.saldo && gerar.data.saldo.situacao !== 'erro' && (
+            <> {textoSaldoDoCliente(gerar.data.saldo)}</>
+          )}
         </p>
+      )}
+      {gerar.isSuccess && gerar.data?.saldo?.situacao === 'erro' && (
+        <p className="alert alert-warn">{textoSaldoDoCliente(gerar.data.saldo)}</p>
       )}
 
       <BarraAcoes

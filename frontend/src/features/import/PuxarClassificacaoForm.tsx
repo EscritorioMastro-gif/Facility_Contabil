@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '@/lib/api';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatMoney } from '@/lib/format';
 import type { ComplementoModo } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
+import { origemDoSaldo } from '@/features/clients/saldo';
+import { moneyToInput, parseMoney } from './useCabecalhoImportacao';
 import { useStatement, useStatements, useUpdateStatementHeader } from '@/features/statements/api';
 import { IconSetaDireita, Spinner } from '@/components/icons';
 import { Carregando, Secao } from '@/components/ui';
@@ -43,12 +45,17 @@ export function PuxarClassificacaoForm({ initialStatementId }: { initialStatemen
   const [histSaida, setHistSaida] = useState('186');
   const [lote, setLote] = useState(1);
   const [modo, setModo] = useState<ComplementoModo>('extrato_classificacao');
+  // O extrato foi lido lá na Classificação (às vezes pelo cliente, semanas
+  // antes): o saldo inicial dele é o do cadastro DE AGORA — que anda sozinho a
+  // cada arquivo do Domínio gerado —, não o de quando foi enviado.
+  const [saldoInicial, setSaldoInicial] = useState('0');
 
   useEffect(() => {
     if (selected) {
       setContaBanco(selected.banco_conta_contabil ?? '');
       setHistEntrada(selected.hist_code_entrada);
       setHistSaida(selected.hist_code_saida);
+      setSaldoInicial(moneyToInput(selected.saldo_inicial ?? 0));
     }
   }, [selected]);
 
@@ -64,6 +71,7 @@ export function PuxarClassificacaoForm({ initialStatementId }: { initialStatemen
         hist_code_entrada: histEntrada,
         hist_code_saida: histSaida,
         lote_numero: lote,
+        saldo_inicial: parseMoney(saldoInicial).toFixed(2),
         complemento_modo: modo,
         status: 'revisao',
       },
@@ -208,6 +216,32 @@ export function PuxarClassificacaoForm({ initialStatementId }: { initialStatemen
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="puxar-saldo">
+                Saldo inicial da conta bancária
+              </label>
+              <div className="relative max-w-xs">
+                <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-semibold text-slate-400">
+                  R$
+                </span>
+                <input
+                  id="puxar-saldo"
+                  className="input pl-10 tabular-nums"
+                  inputMode="decimal"
+                  value={saldoInicial}
+                  onChange={(e) => setSaldoInicial(e.target.value)}
+                  placeholder="0,00"
+                />
+              </div>
+              {selected && (
+                <p className="hint">
+                  Cadastro do cliente: {formatMoney(Math.round(Number(selected.saldo_inicial ?? 0) * 100))}
+                  {origemDoSaldo(selected) ? ` (${origemDoSaldo(selected)})` : ''}. Se o extrato começa com outro
+                  saldo, digite aqui — vale o que estiver neste campo.
+                </p>
+              )}
             </div>
           </Secao>
         </>

@@ -7,7 +7,9 @@ importação de lançamentos contábeis em lote** no **Leiaute Domínio Sistemas
 Depois do login cai num **hub** com três módulos:
 
 - **Cadastros** — clientes: código no Domínio, conta contábil do banco, códigos
-  de histórico padrão e o **saldo inicial da conta bancária**.
+  de histórico padrão e o **saldo inicial da conta bancária** — digitado uma vez
+  e depois atualizado sozinho a cada arquivo do Domínio gerado (ver
+  [Saldo do cliente](#saldo-do-cliente)).
 - **Importação** — o fluxo contábil de ponta a ponta a partir do extrato bancário
   (abaixo).
 - **Classificação** — categoriza os lançamentos do extrato por tipo de despesa/
@@ -45,7 +47,8 @@ progresso, barra de ações) e os estilos base em `frontend/src/index.css`.
    arquivo. O sistema lê os lançamentos, separa entradas/saídas e mostra o
    **saldo bancário acumulado por lançamento** com um painel de conferência —
    pra bater com o saldo do extrato no fim do mês. O saldo inicial é o
-   digitado na importação, ou o do cadastro do cliente.
+   digitado na importação, ou o do cadastro do cliente — que é o saldo final do
+   último arquivo do Domínio gerado (ver [Saldo do cliente](#saldo-do-cliente)).
 
    **Planilha de controle do próprio cliente** (Excel) tem submenu próprio —
    **Nova importação Excel** — separado do extrato de banco: a planilha aparece
@@ -66,7 +69,32 @@ progresso, barra de ações) e os estilos base em `frontend/src/index.css`.
    arquivo junto com (ou no lugar do) texto digitado.
 3. **Gera o `.txt`** no Leiaute Domínio e baixa — pronto pra importar em
    Utilitários → Importação → Lançamentos contábeis em lote (testado, importa
-   sem erro).
+   sem erro). Gerar o arquivo também leva o **saldo final do extrato pro
+   cadastro do cliente** (abaixo).
+
+### Saldo do cliente
+
+Migration `0029`. O saldo do cadastro é o ponto de partida do próximo extrato:
+
+- **Digitado no cadastro** — fica fixo até o próximo arquivo do Domínio gerado.
+- **Gerou o arquivo do Domínio** de um extrato (importação manual, planilha
+  Excel ou extrato puxado da Classificação) — o **saldo final** dele vira o
+  saldo do cadastro. Saldo final = saldo inicial + entradas − saídas de todos
+  os lançamentos, inativados inclusos (o banco mexeu de qualquer jeito). Salvar
+  a revisão sem gerar o arquivo não mexe no cadastro.
+- **Não volta pra trás**: gerar de novo o arquivo de um mês **anterior** ao que
+  já definiu o saldo (agosto depois de setembro) mantém o saldo de setembro.
+  Gerar de novo o **mesmo** mês (depois de corrigir algo) atualiza.
+- A importação nova e o "puxar da Classificação" vêm com o saldo do cadastro
+  preenchido (editável). O extrato puxado pega o saldo **de agora**, não o de
+  quando foi enviado pra Classificação.
+- O cadastro e a importação mostram de onde veio o saldo ("saldo final do
+  extrato até 30/09/2026, arquivo do Domínio gerado em …"); depois de gerar, a
+  Revisão avisa se o saldo do cliente mudou ou ficou.
+
+Por dentro: `avancar_saldo_cliente()` (chamada pelo `POST
+/api/statements/:id/export`) e o trigger `clients_saldo_digitado` (saldo mexido
+no cadastro desliga o vínculo com o extrato).
 
 ## Fluxo — Classificação
 

@@ -42,7 +42,14 @@ export function createApp(): Express {
       // autenticação é por header Authorization, não por cookie
       credentials: false,
       // a tela lê o nome do arquivo do Domínio e a conferência do download
-      exposedHeaders: ['Content-Disposition', 'X-Export-Sha256', 'X-Export-Linhas'],
+      exposedHeaders: [
+        'Content-Disposition',
+        'X-Export-Sha256',
+        'X-Export-Linhas',
+        'X-Saldo-Cliente',
+        'X-Saldo-Valor',
+        'X-Saldo-Ate',
+      ],
     }),
   );
   // o corpo JSON só é lido DEPOIS do login conferido (ver routes/index.ts)

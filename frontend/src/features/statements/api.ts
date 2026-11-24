@@ -206,7 +206,30 @@ export function useSaveTransactions(statementId: string) {
   });
 }
 
-export type DominioExport = { filename: string; linhas: number; sha256: string };
+/** O que gerar o arquivo fez com o saldo do cadastro do cliente (migration 0029). */
+export type SaldoDoCliente = {
+  /** atualizado = o saldo final deste extrato virou o saldo do cadastro;
+   *  mantido = o cadastro já tem o saldo de um extrato mais novo; erro = não gravou */
+  situacao: 'atualizado' | 'mantido' | 'erro';
+  /** saldo do cadastro depois de gerar (reais) */
+  valor: number | null;
+  /** fim do período do extrato que define o saldo do cadastro */
+  ate: string | null;
+};
+
+export type DominioExport = {
+  filename: string;
+  linhas: number;
+  sha256: string;
+  saldo: SaldoDoCliente | null;
+};
+
+function lerSaldoDoCliente(headers: Headers): SaldoDoCliente | null {
+  const situacao = headers.get('x-saldo-cliente');
+  if (situacao !== 'atualizado' && situacao !== 'mantido' && situacao !== 'erro') return null;
+  const valor = headers.get('x-saldo-valor');
+  return { situacao, valor: valor === null ? null : Number(valor), ate: headers.get('x-saldo-ate') };
+}
 
 export function useGenerateDominio(statementId: string) {
   const qc = useQueryClient();
@@ -221,10 +244,13 @@ export function useGenerateDominio(statementId: string) {
         filename,
         linhas: Number(headers.get('x-export-linhas') ?? 0),
         sha256: headers.get('x-export-sha256') ?? '',
+        saldo: lerSaldoDoCliente(headers),
       };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['statements'] });
+      // o saldo do cadastro pode ter andado: a próxima importação parte dele
+      qc.invalidateQueries({ queryKey: ['clients'] });
     },
   });
 }

@@ -7,7 +7,7 @@ import type { CabecalhoInput } from '@/features/statements/api';
  * é separador de milhar (1500), mas "1500.5" é decimal — resolve pelo nº de
  * dígitos depois do último ponto, igual ao `money` do backend.
  */
-function parseMoney(s: string): number {
+export function parseMoney(s: string): number {
   const v = s.trim();
   if (v.includes(',')) return Number(v.replace(/\./g, '').replace(',', '.')) || 0;
   const pontos = v.split('.').length - 1;
@@ -19,7 +19,7 @@ function parseMoney(s: string): number {
 }
 
 /** 1234.56 → "1234,56" (pro campo de texto) */
-function moneyToInput(v: string | number | null | undefined): string {
+export function moneyToInput(v: string | number | null | undefined): string {
   return String(Number(v ?? 0)).replace('.', ',');
 }
 

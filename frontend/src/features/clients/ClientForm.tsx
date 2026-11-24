@@ -3,6 +3,7 @@ import { Spinner } from '@/components/icons';
 import { Secao } from '@/components/ui';
 import type { Client, ClientInput } from '@/lib/types';
 import { ApiError } from '@/lib/api';
+import { origemDoSaldo } from './saldo';
 
 type FormValues = {
   razao_social: string;
@@ -51,7 +52,7 @@ export function ClientForm({
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, dirtyFields },
   } = useForm<FormValues>({ defaultValues: toDefaults(client) });
 
   const submit = handleSubmit((v) => {
@@ -63,7 +64,10 @@ export function ClientForm({
       hist_code_entrada: v.hist_code_entrada.trim() || '138',
       hist_code_saida: v.hist_code_saida.trim() || '186',
       conta_width: Number(v.conta_width) || 7,
-      saldo_inicial: v.saldo_inicial.trim() || '0',
+      // Na edição, só manda o saldo se ele foi mexido: o saldo anda sozinho ao
+      // gerar o arquivo do Domínio, e salvar o cadastro aberto antes disso não
+      // pode voltar pro valor velho.
+      ...(client && !dirtyFields.saldo_inicial ? {} : { saldo_inicial: v.saldo_inicial.trim() || '0' }),
       ativo: v.ativo,
       observacoes: v.observacoes.trim() || null,
     }, v.email_acesso.trim());
@@ -131,7 +135,11 @@ export function ClientForm({
             {...register('saldo_inicial')}
           />
           <p className="hint">
-            usado na conferência do saldo ao importar o extrato
+            {!client
+              ? 'Saldo no início do primeiro extrato. Depois ele anda sozinho: cada arquivo do Domínio gerado traz pra cá o saldo final do extrato.'
+              : origemDoSaldo(client)
+                ? `Atualizado sozinho: ${origemDoSaldo(client)}. Se mudar aqui, vale o seu valor até o próximo arquivo do Domínio.`
+                : 'Digitado no cadastro. Ao gerar o arquivo do Domínio de um extrato deste cliente, o saldo final dele vem pra cá.'}
           </p>
         </div>
       </div>

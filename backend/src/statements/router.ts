@@ -333,9 +333,10 @@ async function novaImportacao(
   if (cErr) throw mapPgrstError(cErr, 'validar cliente');
   if (!client) throw notFound('Cliente não encontrado');
 
-  // Só o que o operador informou: digitado na importação, senão o do cadastro.
-  // Não encadeia do saldo final do extrato anterior — isso trazia saldo de
-  // outro mês/conta sem o operador perceber.
+  // Digitado na importação, senão o do cadastro. O cadastro anda sozinho quando
+  // um arquivo do Domínio é gerado (avancar_saldo_cliente, migration 0029) — não
+  // encadeia do saldo final do último extrato importado, que podia ser de outro
+  // mês/conta ainda não fechado.
   const saldoInicial = dto.saldo_inicial ?? Number(client.saldo_inicial ?? 0);
 
   // cria o statement (parsing)
@@ -806,6 +807,30 @@ statementsRouter.get('/:id/aprovacoes', async (req, res, next) => {
 // --------------------------------------------------------------------------- #
 const EXPORT_BUCKET = 'exports';
 
+type SaldoCliente = {
+  /** atualizado = o cadastro passou a ter o saldo final deste extrato;
+   *  mantido = o cadastro já tem saldo de um período mais novo; erro = não deu pra gravar */
+  situacao: 'atualizado' | 'mantido' | 'erro';
+  /** saldo do cadastro depois da operação */
+  saldo: number | null;
+  /** fim do período do extrato que define o saldo do cadastro (AAAA-MM-DD) */
+  ate: string | null;
+};
+
+async function avancarSaldoCliente(supabase: SupabaseClient, statementId: string): Promise<SaldoCliente> {
+  const { data, error } = await supabase.rpc('avancar_saldo_cliente', { p_statement: statementId });
+  if (error || !data || typeof data !== 'object') {
+    logger.warn({ err: error, statementId }, 'arquivo gerado, mas o saldo do cliente não foi atualizado');
+    return { situacao: 'erro', saldo: null, ate: null };
+  }
+  const r = data as { atualizado: boolean; saldo: number | string | null; ate: string | null };
+  return {
+    situacao: r.atualizado ? 'atualizado' : 'mantido',
+    saldo: r.saldo === null || r.saldo === undefined ? null : Number(r.saldo),
+    ate: r.ate ?? null,
+  };
+}
+
 statementsRouter.post('/:id/export', async (req, res, next) => {
   try {
     const supabase = db(req);
@@ -904,6 +929,15 @@ statementsRouter.post('/:id/export', async (req, res, next) => {
       gerado_por: userId,
     });
     await supabase.from('statements').update({ status: 'gerado' }).eq('id', statementId);
+
+    // Arquivo gerado = extrato fechado: o saldo final dele vira o saldo do
+    // cadastro do cliente (ponto de partida do próximo extrato). Período mais
+    // antigo que o que já moveu o saldo não volta pra trás (migration 0029).
+    // Falhar aqui não segura o arquivo — a tela avisa que o saldo não mudou.
+    const saldo = await avancarSaldoCliente(supabase, statementId);
+    res.setHeader('X-Saldo-Cliente', saldo.situacao);
+    if (saldo.saldo !== null) res.setHeader('X-Saldo-Valor', saldo.saldo.toFixed(2));
+    if (saldo.ate) res.setHeader('X-Saldo-Ate', saldo.ate);
 
     res.setHeader('Content-Type', 'text/plain; charset=iso-8859-1');
     res.setHeader('Content-Disposition', `attachment; filename="${out.filename}"`);

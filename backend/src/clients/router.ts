@@ -7,7 +7,7 @@ import { clientCreateSchema, clientListQuerySchema, clientUpdateSchema } from '.
 
 const TABLE = 'clients';
 const COLUMNS =
-  'id, razao_social, cnpj, dominio_code, banco_conta_contabil, hist_code_entrada, hist_code_saida, conta_width, saldo_inicial, ativo, observacoes, created_at, updated_at';
+  'id, razao_social, cnpj, dominio_code, banco_conta_contabil, hist_code_entrada, hist_code_saida, conta_width, saldo_inicial, saldo_inicial_ate, saldo_inicial_em, ativo, observacoes, created_at, updated_at';
 
 // Sem o requireAuth aqui — quem monta (routes/index.ts) aplica. Assim os testes
 // injetam req.auth / req.supabase próprios.

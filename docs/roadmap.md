@@ -175,7 +175,9 @@ Lançamentos reorganizada em coluna no mobile. Este documento.
   guarda `saldo_inicial` e `saldo_final`. Tela de importação e revisão mostram o
   saldo acumulado por lançamento + painel de conferência. Saldo inicial
   **encadeado** entre extratos do cliente (fecha um mês → abre o próximo);
-  editável, e recalcula o `saldo_final`. migrations 0005/0006.
+  editável, e recalcula o `saldo_final`. migrations 0005/0006. Desde a 0029 o
+  encadeamento é pelo cadastro: gerar o arquivo do Domínio leva o saldo final
+  pro `clients.saldo_inicial` (nunca pra trás no tempo).
 
 ## Milestone 5 — entregue (reformulado: memória automática)
 
