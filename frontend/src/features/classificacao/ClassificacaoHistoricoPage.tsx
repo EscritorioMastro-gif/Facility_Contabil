@@ -11,6 +11,7 @@ import type { Statement, StatementStatus } from '@/lib/types';
 import { useClients } from '@/features/clients/api';
 import { useDeleteStatement, useStatementsPaginados } from '@/features/statements/api';
 import { dataHora, parteAprovada, situacaoAprovacao } from './aprovacao';
+import { nomeDoMes, reais, reaisCurto, useRetiradasHistorico, type MesAcima } from './retiradas';
 
 const STATUS_LABEL: Partial<Record<StatementStatus, { text: string; cls: string }>> = {
   parsing: { text: 'lendo', cls: 'chip-slate' },
@@ -44,6 +45,8 @@ export function ClassificacaoHistoricoPage() {
   const [deleting, setDeleting] = useState<Statement | null>(null);
 
   const shown = statements ?? [];
+  // limite de R$ 50 mil de retiradas no mês: quais extratos da página caem num mês que passou
+  const { data: retiradasAcima } = useRetiradasHistorico(shown.map((s) => s.id));
 
   return (
     <section className="space-y-5">
@@ -112,6 +115,7 @@ export function ClassificacaoHistoricoPage() {
                 <th className="px-4 py-2 text-right">Lanç.</th>
                 <th className="px-4 py-2">Status</th>
                 <th className="px-4 py-2">Aprovação do cliente</th>
+                <th className="px-4 py-2">Avisos</th>
                 <th className="px-4 py-2"></th>
               </tr>
             </thead>
@@ -144,6 +148,9 @@ export function ClassificacaoHistoricoPage() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-2">
                       <SeloAprovacao s={s} ehCliente={ehCliente} />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2">
+                      <SeloRetiradas meses={retiradasAcima?.[s.id]} ehCliente={ehCliente} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-2 text-right">
                       {s.status !== 'parsing' && (
@@ -191,6 +198,20 @@ export function ClassificacaoHistoricoPage() {
         }}
       />
     </section>
+  );
+}
+
+/** Mês em que pró-labore + distribuição de lucro da empresa passaram de R$ 50 mil. */
+function SeloRetiradas({ meses, ehCliente }: { meses?: MesAcima[]; ehCliente: boolean }) {
+  if (!meses?.length) return null;
+  const maior = meses.reduce((a, b) => (b.total > a.total ? b : a));
+  const detalhe = meses
+    .map((m) => `${nomeDoMes(m.mes)}: pró-labore ${reais(m.pro_labore)} + distribuição de lucro ${reais(m.distribuicao)} = ${reais(m.total)}`)
+    .join('; ');
+  return (
+    <span className="chip chip-red" title={`Retiradas acima de R$ 50.000,00 no mês — ${detalhe}`}>
+      retirada {reaisCurto(maior.total)} · {ehCliente ? 'avise o escritório' : 'gerar guia 10%'}
+    </span>
   );
 }
 

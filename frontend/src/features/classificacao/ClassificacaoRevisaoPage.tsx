@@ -20,6 +20,8 @@ import { ClassificacaoSelect } from './ClassificacaoSelect';
 import { AdicionarDaListaGeral } from './AdicionarDaListaGeral';
 import { AvisoAprovacao, HistoricoAprovacoes, ModalAprovacao } from './AprovacaoCliente';
 import { plural, situacaoAprovacao } from './aprovacao';
+import { AvisoRetiradas } from './AvisoRetiradas';
+import { mesesAcimaDoLimite, textoRetiradasAprovacao, useRetiradasExtrato } from './retiradas';
 
 type Filter = 'todas' | 'entrada' | 'saida' | 'pendentes' | 'sugestoes';
 
@@ -87,6 +89,14 @@ export function ClassificacaoRevisaoPage() {
     }
     return { ativos: ativos.length, classificados, pend, novos, sugestoes, daMemoria };
   }, [transactions, get, origemDe]);
+
+  // limite de R$ 50 mil de retiradas no mês (pró-labore + distribuição de lucro, todos os
+  // extratos da empresa) — conta o que está na tela, mesmo antes de salvar
+  const { data: retiradas } = useRetiradasExtrato(id);
+  const mesesAcima = useMemo(
+    () => (retiradas ? mesesAcimaDoLimite(retiradas, transactions, get) : []),
+    [retiradas, transactions, get],
+  );
 
   // Pendentes/Sugestões pelo que está SALVO (ou acabou de ser sugerido): a linha
   // não some da tela no meio da digitação — só depois de salvar.
@@ -309,6 +319,7 @@ export function ClassificacaoRevisaoPage() {
         <Etapas etapas={ETAPAS_CLASSIFICACAO} atual={etapa} />
       </PageHeader>
 
+      <AvisoRetiradas meses={mesesAcima} ehCliente={ehCliente} />
       <AvisoAprovacao st={st} ehCliente={ehCliente} />
       <HistoricoAprovacoes st={st} ehCliente={ehCliente} />
 
@@ -618,6 +629,7 @@ export function ClassificacaoRevisaoPage() {
         email={user?.email ?? null}
         busy={ocupado}
         erro={erroAprovacao}
+        avisoRetiradas={textoRetiradasAprovacao(mesesAcima)}
         onAprovar={confirmarAprovacao}
         onCancelar={() => setAprovando(false)}
       />

@@ -7,6 +7,7 @@ import { clientsRouter } from '../clients/router.js';
 import { statementsRouter } from '../statements/router.js';
 import { rulesRouter } from '../rules/router.js';
 import { classificacoesRouter } from '../classificacoes/router.js';
+import { portalRetiradasRouter, retiradasRouter } from '../classificacoes/retiradas.js';
 import { acessosRouter } from '../acessos/router.js';
 import { portalClientesRouter } from '../portal/clientes.js';
 import { portalExtratosRouter } from '../portal/extratos.js';
@@ -57,6 +58,12 @@ apiRouter.use(
   requireAuth,
   json,
   porPapel({ escritorio: doEscritorio(classificacoesRouter), cliente: portalClassificacoesRouter }),
+);
+// limite mensal de retiradas (pró-labore + distribuição de lucro) — classificacoes/retiradas.ts
+apiRouter.use(
+  '/retiradas',
+  requireAuth,
+  porPapel({ escritorio: doEscritorio(retiradasRouter), cliente: portalRetiradasRouter }),
 );
 apiRouter.use('/acessos', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, acessosRouter);
 apiRouter.use('/equipe', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, equipeRouter);

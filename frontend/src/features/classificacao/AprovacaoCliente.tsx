@@ -85,6 +85,7 @@ export function ModalAprovacao({
   email,
   busy,
   erro,
+  avisoRetiradas = null,
   onAprovar,
   onCancelar,
 }: {
@@ -99,6 +100,8 @@ export function ModalAprovacao({
   email: string | null;
   busy: boolean;
   erro: string | null;
+  /** pró-labore + distribuição de lucro passaram de R$ 50 mil no mês (retiradas.ts) */
+  avisoRetiradas?: string | null;
   onAprovar: () => void;
   onCancelar: () => void;
 }) {
@@ -138,6 +141,7 @@ export function ModalAprovacao({
             {pendentes === 1 ? 'Ele fica' : 'Eles ficam'} para a próxima aprovação — dá pra continuar depois.
           </p>
         )}
+        {avisoRetiradas && <p className="alert alert-error">{avisoRetiradas}</p>}
         <p className="text-xs text-slate-500">
           As suas classificações são salvas e fica registrado o seu login{email ? ` (${email})` : ''}, a data, a hora
           e o IP. Se um lançamento que você aprovou for alterado depois, o extrato volta a aguardar a sua aprovação.
