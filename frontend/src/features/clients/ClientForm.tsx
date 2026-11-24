@@ -16,7 +16,7 @@ type FormValues = {
   saldo_inicial: string;
   ativo: boolean;
   observacoes: string;
-  /** só no cadastro novo: libera o portal (módulo Classificação) pra esse e-mail */
+  /** só no cadastro novo: libera o portal (Classificação e Conferência Marketplaces) pra esse e-mail */
   email_acesso: string;
 };
 
@@ -185,8 +185,8 @@ export function ClientForm({
           />
           {errors.email_acesso && <p className="mt-1 text-xs font-semibold text-red-600">e-mail inválido</p>}
           <p className="hint">
-            Se preencher, o cliente recebe um convite por e-mail para criar a senha e passa a ver só o
-            módulo Classificação desta empresa. Pode deixar em branco e liberar depois, na edição.
+            Se preencher, o cliente recebe um convite por e-mail para criar a senha e passa a ver os
+            módulos Classificação e Conferência Marketplaces desta empresa. Pode deixar em branco e liberar depois, na edição.
           </p>
         </div>
       )}

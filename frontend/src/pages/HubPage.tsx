@@ -33,7 +33,7 @@ export function HubPage() {
             </h1>
             <p className="mt-4 text-[15px] leading-relaxed text-slate-600">
               {ehCliente
-                ? 'Classifique os lançamentos do seu extrato, confira e aprove — o escritório recebe tudo pronto para a contabilidade.'
+                ? 'Classifique os lançamentos do seu extrato, confira e aprove — o escritório recebe tudo pronto para a contabilidade. E confira os pedidos e as taxas do seu marketplace.'
                 : 'Do extrato bancário ao arquivo do Domínio: importação, classificação automática pela memória e conferência do saldo, num lugar só.'}
             </p>
             <div className="mt-6 flex flex-wrap gap-2">
@@ -45,6 +45,9 @@ export function HubPage() {
                   </Link>
                   <Link to="/classificacao/dashboard" className="btn-ghost">
                     Ver dashboard
+                  </Link>
+                  <Link to="/marketplaces/shopee" className="btn-ghost">
+                    Conferência Marketplaces
                   </Link>
                 </>
               ) : (
@@ -81,7 +84,7 @@ export function HubPage() {
             </h2>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {MODULES.map((m, i) => {
               const bloqueado = moduloBloqueado(m, papel);
             const itens = navDoPapel(m, papel);
@@ -129,7 +132,7 @@ export function HubPage() {
 
                 <div className="relative mt-auto pt-5">
                   {bloqueado ? (
-                    <p className="text-xs text-slate-400">Seu acesso é ao módulo Classificação.</p>
+                    <p className="text-xs text-slate-400">Seu acesso é aos módulos Classificação e Conferência Marketplaces.</p>
                   ) : (
                     <Link to={m.home} className="link text-sm">
                       Abrir {m.label}

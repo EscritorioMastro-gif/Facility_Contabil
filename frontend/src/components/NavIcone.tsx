@@ -20,6 +20,7 @@ const ICONE_MODULO: Record<string, Icone> = {
   cadastros: IconCadastros,
   importacao: IconImportacao,
   classificacao: IconClassificacao,
+  marketplaces: IconSacola,
 };
 
 const ICONE_ITEM: Record<IconeNav, Icone> = {
@@ -34,6 +35,7 @@ const ICONE_ITEM: Record<IconeNav, Icone> = {
   categorias: IconClassificacao,
   lista: IconLista,
   marketplace: IconSacola,
+  chamados: IconLista,
   tarifas: IconPlanilha,
 };
 

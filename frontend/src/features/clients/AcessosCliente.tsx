@@ -73,8 +73,8 @@ export function AcessosCliente({ clientId }: { clientId: string }) {
       </h3>
       <p className="mt-1 text-xs leading-relaxed text-slate-500">
         O cliente entra com o próprio e-mail e uma senha que ele mesmo cria pelo link do convite —
-        o escritório não vê a senha. Ele acessa só o módulo Classificação desta empresa (e das outras
-        empresas liberadas para o mesmo e-mail).
+        o escritório não vê a senha. Ele acessa os módulos Classificação e Conferência Marketplaces desta
+        empresa (e das outras empresas liberadas para o mesmo e-mail).
       </p>
 
       {isLoading ? (

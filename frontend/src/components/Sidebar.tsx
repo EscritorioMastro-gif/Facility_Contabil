@@ -139,7 +139,10 @@ export function SidebarNav({ onNavigate, onBuscar }: { onNavigate?: () => void; 
                   >
                     <ModuloIcone id={m.id} className="h-[18px] w-[18px]" />
                   </span>
-                  <span className="truncate">{m.label}</span>
+                  {/* nome comprido (Conferência Marketplaces) quebra em duas linhas em vez de cortar */}
+                  <span className="line-clamp-2 leading-tight" title={m.label}>
+                    {m.label}
+                  </span>
                 </Link>
                 {itens.length > 1 && (
                   <button

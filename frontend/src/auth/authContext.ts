@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 
-/** 'cliente' = login do portal (só o módulo Classificação das empresas liberadas). */
+/** 'cliente' = login do portal (módulos Classificação e Conferência Marketplaces das empresas liberadas). */
 export type Papel = 'escritorio' | 'cliente';
 
 export type AuthState = {

@@ -13,6 +13,7 @@ export type IconeNav =
   | 'categorias'
   | 'lista'
   | 'marketplace'
+  | 'chamados'
   | 'tarifas';
 
 export type NavItem = {
@@ -80,10 +81,23 @@ export const MODULES: ModuleDef[] = [
       { to: '/classificacao', label: 'Classificar extrato', icone: 'classificar', descricao: 'Enviar um extrato para classificar' },
       { to: '/classificacao/historico', label: 'Histórico', icone: 'historico', descricao: 'Extratos classificados e aprovações' },
       { to: '/classificacao/categorias', label: 'Classificações', icone: 'categorias', descricao: 'A lista própria de cada cliente' },
-      { to: '/classificacao/shopee', label: 'Conferência Shopee', icone: 'marketplace', descricao: 'Pedidos não pagos, comissão e taxas a mais, devoluções' },
-      { to: '/classificacao/shopee/custos', label: 'Custos Shopee', icone: 'dashboard', descricao: 'O que a loja pagou à Shopee no mês e o simulador de preço' },
-      { to: '/classificacao/shopee/tarifas', label: 'Tarifas Shopee', icone: 'tarifas', descricao: 'A tabela de comissão e taxas do cliente' },
       { to: '/classificacao/lista-geral', label: 'Lista geral', soEscritorio: true, icone: 'lista', descricao: 'A lista do escritório' },
+    ],
+  },
+  {
+    // liberado pro login de cliente, como a Classificação (sem soEscritorio)
+    id: 'marketplaces',
+    label: 'Conferência Marketplaces',
+    description:
+      'Importa os relatórios do marketplace (Shopee) e confere pedidos não pagos, comissão e taxas cobradas a mais, devoluções e o que a loja pagou no mês.',
+    resumo: 'Pedidos não pagos, taxas a mais, custos do mês e simulador de preço.',
+    home: '/marketplaces/shopee',
+    match: (p) => p.startsWith('/marketplaces'),
+    nav: [
+      { to: '/marketplaces/shopee', label: 'Conferência Shopee', icone: 'marketplace', descricao: 'Pedidos não pagos, comissão e taxas a mais, devoluções' },
+      { to: '/marketplaces/shopee/custos', label: 'Custos Shopee', icone: 'dashboard', descricao: 'O que a loja pagou à Shopee no mês e o simulador de preço' },
+      { to: '/marketplaces/shopee/chamados', label: 'Chamados Shopee', icone: 'chamados', descricao: 'Os chamados abertos na Shopee e os pedidos de cada um' },
+      { to: '/marketplaces/shopee/tarifas', label: 'Tarifas Shopee', icone: 'tarifas', descricao: 'A tabela de comissão e taxas do cliente' },
     ],
   },
 ];

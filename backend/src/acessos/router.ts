@@ -1,6 +1,6 @@
 /**
- * /api/acessos — o escritório libera o portal (módulo Classificação) pro
- * cliente, pelo e-mail dele.
+ * /api/acessos — o escritório libera o portal (módulos Classificação e
+ * Conferência Marketplaces) pro cliente, pelo e-mail dele.
  *
  * E-mail novo: cria o login já marcado como cliente (app_metadata.papel) e o
  * Supabase manda o convite — o cliente clica e define a própria senha (fica só

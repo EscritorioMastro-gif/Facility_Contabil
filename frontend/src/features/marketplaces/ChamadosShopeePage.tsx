@@ -59,7 +59,7 @@ export function ChamadosShopeePage() {
         titulo="Chamados Shopee"
         descricao="Os chamados abertos na Shopee e os pedidos de cada um. Cada pedido entra em um chamado só."
         acoes={
-          <Link to="/classificacao/shopee" className="btn-ghost">
+          <Link to="/marketplaces/shopee" className="btn-ghost">
             Conferência Shopee
           </Link>
         }

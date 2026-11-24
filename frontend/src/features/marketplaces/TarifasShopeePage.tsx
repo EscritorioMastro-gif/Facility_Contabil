@@ -128,7 +128,7 @@ export function TarifasShopeePage() {
             : 'A tabela que o cliente preencheu (a conferência usa ela). Só o cliente altera, pelo portal.'
         }
         acoes={
-          <Link to="/classificacao/shopee" className="btn-ghost">
+          <Link to="/marketplaces/shopee" className="btn-ghost">
             Conferência Shopee
           </Link>
         }

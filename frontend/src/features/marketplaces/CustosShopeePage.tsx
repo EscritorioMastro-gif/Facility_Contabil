@@ -85,7 +85,7 @@ export function CustosShopeePage() {
         titulo="Custos Shopee"
         descricao="Tudo o que a loja pagou à Shopee no mês — cada cobrança, a taxa aplicada, o total pago e o que ficou para a loja — e um simulador para ajustar o preço dos produtos. Pela data em que o dinheiro mexeu na carteira."
         acoes={
-          <Link to="/classificacao/shopee" className="btn-ghost">
+          <Link to="/marketplaces/shopee" className="btn-ghost">
             Conferência Shopee
           </Link>
         }

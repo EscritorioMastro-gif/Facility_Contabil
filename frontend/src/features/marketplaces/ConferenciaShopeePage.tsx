@@ -114,13 +114,13 @@ export function ConferenciaShopeePage() {
             <button className="btn-primary" disabled={!clientId} onClick={() => setImportando(true)}>
               Importar relatórios
             </button>
-            <Link to="/classificacao/shopee/custos" className="btn-ghost">
+            <Link to="/marketplaces/shopee/custos" className="btn-ghost">
               Custos
             </Link>
-            <Link to="/classificacao/shopee/chamados" className="btn-ghost">
+            <Link to="/marketplaces/shopee/chamados" className="btn-ghost">
               Chamados
             </Link>
-            <Link to="/classificacao/shopee/tarifas" className="btn-ghost">
+            <Link to="/marketplaces/shopee/tarifas" className="btn-ghost">
               Tabela de tarifas
             </Link>
           </>
@@ -186,7 +186,7 @@ export function ConferenciaShopeePage() {
             <p className="alert alert-warn">
               {ehCliente ? (
                 <>
-                  Preencha a sua <Link to="/classificacao/shopee/tarifas" className="link">tabela de tarifas</Link> para conferir a
+                  Preencha a sua <Link to="/marketplaces/shopee/tarifas" className="link">tabela de tarifas</Link> para conferir a
                   comissão e as taxas cobradas pela Shopee.
                 </>
               ) : (

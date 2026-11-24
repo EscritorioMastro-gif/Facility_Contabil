@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
-/** Login de cliente com acesso a uma empresa (portal — só o módulo Classificação). */
+/** Login de cliente com acesso a uma empresa (portal — módulos Classificação e Conferência Marketplaces). */
 export type AcessoCliente = {
   id: string;
   client_id: string;

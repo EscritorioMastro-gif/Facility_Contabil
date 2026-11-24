@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { AppLayout } from '@/components/AppLayout';
 import { RequireAuth, SoEscritorio } from '@/auth/RequireAuth';
 import { LoginPage } from '@/pages/LoginPage';
@@ -21,6 +21,12 @@ import { ConferenciaShopeePage } from '@/features/marketplaces/ConferenciaShopee
 import { TarifasShopeePage } from '@/features/marketplaces/TarifasShopeePage';
 import { ChamadosShopeePage } from '@/features/marketplaces/ChamadosShopeePage';
 import { CustosShopeePage } from '@/features/marketplaces/CustosShopeePage';
+
+/** /classificacao/shopee/custos (endereço antigo) → /marketplaces/shopee/custos */
+function RedirecionaShopee() {
+  const { tela } = useParams();
+  return <Navigate to={`/marketplaces/shopee/${tela ?? ''}`} replace />;
+}
 
 export function App() {
   return (
@@ -48,10 +54,15 @@ export function App() {
         <Route path="/classificacao/revisao/:id" element={<ClassificacaoRevisaoPage />} />
         <Route path="/classificacao/historico" element={<ClassificacaoHistoricoPage />} />
         <Route path="/classificacao/categorias" element={<CategoriasPage />} />
-        <Route path="/classificacao/shopee" element={<ConferenciaShopeePage />} />
-        <Route path="/classificacao/shopee/tarifas" element={<TarifasShopeePage />} />
-        <Route path="/classificacao/shopee/chamados" element={<ChamadosShopeePage />} />
-        <Route path="/classificacao/shopee/custos" element={<CustosShopeePage />} />
+        {/* Conferência Marketplaces: módulo próprio, liberado pro cliente como a Classificação */}
+        <Route path="/marketplaces" element={<Navigate to="/marketplaces/shopee" replace />} />
+        <Route path="/marketplaces/shopee" element={<ConferenciaShopeePage />} />
+        <Route path="/marketplaces/shopee/custos" element={<CustosShopeePage />} />
+        <Route path="/marketplaces/shopee/chamados" element={<ChamadosShopeePage />} />
+        <Route path="/marketplaces/shopee/tarifas" element={<TarifasShopeePage />} />
+        {/* endereços antigos (dentro da Classificação) */}
+        <Route path="/classificacao/shopee" element={<Navigate to="/marketplaces/shopee" replace />} />
+        <Route path="/classificacao/shopee/:tela" element={<RedirecionaShopee />} />
         <Route path="/classificacao/lista-geral" element={<SoEscritorio><ListaGeralPage /></SoEscritorio>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
