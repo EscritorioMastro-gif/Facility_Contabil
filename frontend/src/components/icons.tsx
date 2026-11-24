@@ -416,6 +416,16 @@ export function IconFaisca(props: IconProps) {
   );
 }
 
+/** Sacola de compras — conferência de marketplace (Shopee). */
+export function IconSacola(props: IconProps) {
+  return (
+    <Base {...props}>
+      <path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8Z" />
+      <path d="M9 10V7a3 3 0 0 1 6 0v3" />
+    </Base>
+  );
+}
+
 /** Indicador de carregamento (gira sozinho). */
 export function Spinner({ className = 'h-4 w-4' }: { className?: string }) {
   return (

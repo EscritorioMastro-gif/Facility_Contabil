@@ -17,6 +17,10 @@ import { CategoriasPage } from '@/features/classificacao/CategoriasPage';
 import { ListaGeralPage } from '@/features/classificacao/ListaGeralPage';
 import { DashboardPage } from '@/features/classificacao/DashboardPage';
 import { EquipePage } from '@/features/equipe/EquipePage';
+import { ConferenciaShopeePage } from '@/features/marketplaces/ConferenciaShopeePage';
+import { TarifasShopeePage } from '@/features/marketplaces/TarifasShopeePage';
+import { ChamadosShopeePage } from '@/features/marketplaces/ChamadosShopeePage';
+import { CustosShopeePage } from '@/features/marketplaces/CustosShopeePage';
 
 export function App() {
   return (
@@ -44,6 +48,10 @@ export function App() {
         <Route path="/classificacao/revisao/:id" element={<ClassificacaoRevisaoPage />} />
         <Route path="/classificacao/historico" element={<ClassificacaoHistoricoPage />} />
         <Route path="/classificacao/categorias" element={<CategoriasPage />} />
+        <Route path="/classificacao/shopee" element={<ConferenciaShopeePage />} />
+        <Route path="/classificacao/shopee/tarifas" element={<TarifasShopeePage />} />
+        <Route path="/classificacao/shopee/chamados" element={<ChamadosShopeePage />} />
+        <Route path="/classificacao/shopee/custos" element={<CustosShopeePage />} />
         <Route path="/classificacao/lista-geral" element={<SoEscritorio><ListaGeralPage /></SoEscritorio>} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

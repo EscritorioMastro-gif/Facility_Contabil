@@ -10,6 +10,7 @@ import {
   IconLista,
   IconMemoria,
   IconPlanilha,
+  IconSacola,
   IconUpload,
 } from './icons';
 
@@ -32,6 +33,8 @@ const ICONE_ITEM: Record<IconeNav, Icone> = {
   classificar: IconUpload,
   categorias: IconClassificacao,
   lista: IconLista,
+  marketplace: IconSacola,
+  tarifas: IconPlanilha,
 };
 
 export function NavIcone({ nome, className }: { nome: IconeNav; className?: string }) {

@@ -8,6 +8,7 @@ import { statementsRouter } from '../statements/router.js';
 import { rulesRouter } from '../rules/router.js';
 import { classificacoesRouter } from '../classificacoes/router.js';
 import { portalRetiradasRouter, retiradasRouter } from '../classificacoes/retiradas.js';
+import { marketplacesRouter, portalMarketplacesRouter } from '../marketplaces/router.js';
 import { acessosRouter } from '../acessos/router.js';
 import { portalClientesRouter } from '../portal/clientes.js';
 import { portalExtratosRouter } from '../portal/extratos.js';
@@ -64,6 +65,16 @@ apiRouter.use(
   '/retiradas',
   requireAuth,
   porPapel({ escritorio: doEscritorio(retiradasRouter), cliente: portalRetiradasRouter }),
+);
+// conferência de pedidos de marketplace (Shopee) — marketplaces/router.ts; a importação recebe arquivo
+const IMPORTAR_MARKETPLACE = /^\/[^/]+\/importar\/?$/;
+apiRouter.use(
+  '/marketplaces',
+  requireAuth,
+  (req: Request, res: Response, next: NextFunction) =>
+    req.method === 'POST' && IMPORTAR_MARKETPLACE.test(req.path) ? limiteUpload(req, res, next) : next(),
+  json,
+  porPapel({ escritorio: doEscritorio(marketplacesRouter), cliente: portalMarketplacesRouter }),
 );
 apiRouter.use('/acessos', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, acessosRouter);
 apiRouter.use('/equipe', requireAuth, soEscritorio, exigirEscritorio, soEmPost(limiteConvites), json, equipeRouter);

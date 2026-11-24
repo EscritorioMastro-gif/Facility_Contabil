@@ -11,7 +11,9 @@ export type IconeNav =
   | 'dashboard'
   | 'classificar'
   | 'categorias'
-  | 'lista';
+  | 'lista'
+  | 'marketplace'
+  | 'tarifas';
 
 export type NavItem = {
   to: string;
@@ -78,6 +80,9 @@ export const MODULES: ModuleDef[] = [
       { to: '/classificacao', label: 'Classificar extrato', icone: 'classificar', descricao: 'Enviar um extrato para classificar' },
       { to: '/classificacao/historico', label: 'Histórico', icone: 'historico', descricao: 'Extratos classificados e aprovações' },
       { to: '/classificacao/categorias', label: 'Classificações', icone: 'categorias', descricao: 'A lista própria de cada cliente' },
+      { to: '/classificacao/shopee', label: 'Conferência Shopee', icone: 'marketplace', descricao: 'Pedidos não pagos, comissão e taxas a mais, devoluções' },
+      { to: '/classificacao/shopee/custos', label: 'Custos Shopee', icone: 'dashboard', descricao: 'O que a loja pagou à Shopee no mês e o simulador de preço' },
+      { to: '/classificacao/shopee/tarifas', label: 'Tarifas Shopee', icone: 'tarifas', descricao: 'A tabela de comissão e taxas do cliente' },
       { to: '/classificacao/lista-geral', label: 'Lista geral', soEscritorio: true, icone: 'lista', descricao: 'A lista do escritório' },
     ],
   },
