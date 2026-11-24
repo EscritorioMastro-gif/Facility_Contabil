@@ -238,7 +238,7 @@ function Cobrancas({ m }: { m: CustosMes }) {
             <div className="flex justify-between border-b border-slate-200 px-1 pb-1 pt-2 text-sm font-medium text-slate-700">
               <span>{titulo}</span>
               <span className="tabular-nums">
-                {reais(sub)} · {pct(sub / liq)}
+                {reais(sub)} · {pct(sub / liq, 2)}
               </span>
             </div>
             {linhas.map((c) => {
