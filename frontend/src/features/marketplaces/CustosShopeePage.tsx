@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CarregandoLinhas, ErroCarregar, PageHeader, Segmented, Vazio } from '@/components/ui';
 import { IconSacola } from '@/components/icons';
@@ -186,7 +186,7 @@ function Avisos({ meses }: { meses: CustosMes[] }) {
   );
 }
 
-function Cartao({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: string }) {
+function Cartao({ rotulo, valor, detalhe }: { rotulo: string; valor: string; detalhe?: ReactNode }) {
   return (
     <div className="rounded-xl bg-slate-50 px-4 py-3">
       <p className="text-xs text-slate-500">{rotulo}</p>
@@ -203,7 +203,22 @@ function Resumo({ m }: { m: CustosMes }) {
   return (
     <div className="card space-y-4 p-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Cartao rotulo="Vendas (sem devoluções)" valor={reais(liq)} detalhe={`${inteiro(m.pedidos)} pedidos · ${inteiro(m.itens)} itens`} />
+        <Cartao
+          rotulo="Vendas (sem devoluções)"
+          valor={reais(liq)}
+          detalhe={
+            <>
+              {m.devolvido ? (
+                <span className="block" title="Vendido: preço depois da promoção da própria loja. Devolvido: reembolsos antes e depois do pagamento.">
+                  {reais(m.vendas)} vendidos − {reais(m.devolvido)} devolvidos
+                </span>
+              ) : null}
+              <span className="block">
+                {inteiro(m.pedidos)} pedidos · {inteiro(m.itens)} itens
+              </span>
+            </>
+          }
+        />
         <Cartao rotulo="Pago à Shopee" valor={reais(m.total_custos)} detalhe={liq ? `${pct(m.total_custos / liq)} das vendas` : undefined} />
         <Cartao rotulo="Ficou para a loja" valor={reais(m.recebido)} detalhe={m.compensacao ? `com ${reais(m.compensacao)} de compensação` : 'entrou na carteira'} />
       </div>
