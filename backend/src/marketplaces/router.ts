@@ -179,7 +179,7 @@ const COLS_PEDIDO =
   'pedido, status, status_marketplace, status_devolucao, motivo_cancelamento, criado_em, concluido_em, valor_produtos, itens, chamado_id, chamado_resolvido_em, chamado_resolvido_por_email, chamado:marketplace_chamados(id, numero, aberto_em, aberto_por_email, obs, resolvido_em)';
 
 const COLS_REPASSE =
-  'pedido, criado_dia, pago_em, preco, reembolso, cupom, incentivo_cupom, voucher_loja, frete_comprador, frete_desconto, frete_transportadora, comissao_bruta, comissao_liquida, servico_bruta, servico_liquida, transacao, campanha, por_item, devolucao_facil, outros, liquido, frete_esperado, frete_real';
+  'pedido, criado_dia, pago_em, preco, reembolso, cupom, incentivo_cupom, voucher_loja, frete_comprador, frete_desconto, frete_transportadora, comissao_bruta, comissao_liquida, servico_bruta, servico_liquida, transacao, campanha, por_item, devolucao_facil, afiliados_comissao, afiliados_servico, pix, envio_reverso, outros, liquido, frete_esperado, frete_real';
 
 const COLS_MOVIMENTO = 'pedido, data, seq, categoria, valor, saldo_apos, tipo, descricao';
 
@@ -200,6 +200,10 @@ const NUM_REPASSE = [
   'campanha',
   'por_item',
   'devolucao_facil',
+  'afiliados_comissao',
+  'afiliados_servico',
+  'pix',
+  'envio_reverso',
   'outros',
   'liquido',
 ] as const;

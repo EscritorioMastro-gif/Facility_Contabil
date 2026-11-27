@@ -71,6 +71,19 @@ describe('migration 0034 — marketplaces', () => {
     }
   });
 
+  it('0035: afiliados, Pix e frete de devolução têm coluna própria (0 nas linhas antigas)', async () => {
+    const r = await db.query<Record<string, string>>(
+      `select afiliados_comissao, afiliados_servico, pix, envio_reverso from public.marketplace_repasses where pedido = '241101ABC'`,
+    );
+    expect(r.rows[0]).toEqual({ afiliados_comissao: '0.00', afiliados_servico: '0.00', pix: '0.00', envio_reverso: '0.00' });
+    await como(db, ESC, () =>
+      db.exec(`update public.marketplace_repasses set afiliados_comissao = -7.04, afiliados_servico = -0.98, pix = -4.49, envio_reverso = -15
+               where pedido = '241101ABC'`),
+    );
+    const d = await db.query<Record<string, string>>(`select pix, envio_reverso from public.marketplace_repasses where pedido = '241101ABC'`);
+    expect(d.rows[0]).toEqual({ pix: '-4.49', envio_reverso: '-15.00' });
+  });
+
   it('o mesmo pedido / movimento da carteira não entra duas vezes (reimportar = atualizar)', async () => {
     await expect(como(db, ESC, () => db.exec(inserirPedido('241101ABC')))).rejects.toThrow(/duplicate key|unique/i);
     await expect(

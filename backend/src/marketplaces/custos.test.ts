@@ -2,6 +2,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Movimento, Repasse } from './conferencia.js';
 import { custosDoRepasse, custosPorMes, taxasAtuais, taxasObservadas } from './custos.js';
+import { lerXlsx } from './xlsx.js';
+import { lerRelatorioShopee, type RelatorioShopee } from './shopee.js';
+import { relatorioRendaLoja2 } from '../test/relatoriosShopee.js';
 
 const zero = {
   reembolso: 0,
@@ -164,5 +167,70 @@ describe('taxas observadas', () => {
     expect(obs.get('2026-10-03')).toEqual(obs.get('2026-10-02'));
     expect(taxasAtuais(obs)).toMatchObject({ comissao: 18.6, desde: '2026-10-02' });
     expect(taxasAtuais(new Map())).toBeNull();
+  });
+});
+
+describe('loja com afiliados, Pix, frete de devolução e faixas de preço', () => {
+  const rel = lerRelatorioShopee(lerXlsx(relatorioRendaLoja2())) as Extract<RelatorioShopee, { tipo: 'renda' }>;
+  const reps = rel.repasses;
+  let saldo = 0;
+  const movs = reps.map((x, i) => {
+    saldo = Math.round((saldo + x.liquido) * 100) / 100;
+    return mov(`2026-10-2${i}T10:00:00-03:00`, 'renda_pedido', x.liquido, saldo, x.pedido);
+  });
+  const { meses } = custosPorMes(movs, reps, new Map([['A1', 1], ['A2', 1], ['A3', 2], ['A4', 0]]));
+  const out = meses[0]!;
+
+  it('cada cobrança pelo nome, o Pix compensado e a conta fecha com a carteira', () => {
+    expect(out.custos).toMatchObject({
+      afiliados: 8.02, // 7,04 do afiliado + 0,98 da Shopee
+      cupom_shopee: 0, // 4,49 de Pix − 1,86 − 2,63 devolvidos nas taxas
+      frete_devolucao: 15,
+      frete_a_mais: 9.62,
+      por_item: 41, // 4,50 + 16 + 20,50 (o detalhe dizia 41 só no A3)
+      devolucao_facil: 0,
+      outros: 0,
+    });
+    expect(out).toMatchObject({ pedidos: 4, itens: 4, fecha: true, diferenca: 0 });
+  });
+
+  it('a devolução de venda que já saiu negativa não "devolve" taxa', () => {
+    const debito = mov('2026-10-29T10:00:00-03:00', 'debito_devolucao', -10, Math.round((saldo - 10) * 100) / 100, 'A4');
+    const { meses: m2 } = custosPorMes([...movs, debito], reps, new Map());
+    expect(m2[0]).toMatchObject({ fecha: true, custos: { frete_devolucao: 15 } });
+  });
+
+  it('faixas de preço: a taxa de cada pedido nos rótulos e as faixas para o simulador', () => {
+    const p = (pedido: string, criado_dia: string, preco: number, com: number, tr: number, item: number): Repasse => ({
+      ...zero,
+      pedido,
+      criado_dia,
+      pago_em: '2026-10-30',
+      preco,
+      comissao_bruta: -com,
+      comissao_liquida: -com,
+      servico_bruta: -(tr + item),
+      servico_liquida: -(tr + item),
+      transacao: -tr,
+      campanha: 0,
+      por_item: -item,
+      devolucao_facil: 0,
+      liquido: Math.round((preco - com - tr - item) * 100) / 100,
+    });
+    const reps2 = [
+      p('B1', '2026-10-10', 49.99, 9.3, 0.7, 4.5),
+      p('B2', '2026-10-11', 69.99, 13.02, 0.98, 4.5),
+      p('C1', '2026-10-10', 89.9, 11.33, 1.26, 16),
+      p('C2', '2026-10-12', 89.99, 11.34, 1.26, 16),
+    ];
+    let s = 0;
+    const m = reps2.map((x, i) => mov(`2026-10-3${i % 2}T1${i}:00:00-03:00`, 'renda_pedido', x.liquido, (s = Math.round((s + x.liquido) * 100) / 100), x.pedido));
+    const r = custosPorMes(m, reps2, new Map(reps2.map((x) => [x.pedido, 1])));
+    expect(r.total.aplicadas.comissao).toEqual({ '18,6%': 2, '12,6%': 2 });
+    expect(r.total.aplicadas.por_item).toEqual({ 'R$ 4,50': 2, 'R$ 16,00': 2 });
+    expect(r.faixas).toEqual([
+      { comissao: 18.6, transacao: 1.4, campanha: 0, por_item: 4.5, por_pedido: 0, preco_min: 49.99, preco_max: 69.99, pedidos: 2 },
+      { comissao: 12.6, transacao: 1.4, campanha: 0, por_item: 16, por_pedido: 0, preco_min: 89.9, preco_max: 89.99, pedidos: 2 },
+    ]);
   });
 });

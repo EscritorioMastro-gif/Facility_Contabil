@@ -416,17 +416,24 @@ function ModalExtrato({ p, onFechar }: { p: PedidoConferido | null; onFechar: ()
     linhas.push({ rotulo: 'Taxa de transação', sub: pctDe(e.transacao), valor: e.transacao, sinal: '-' });
     if (e.campanha) linhas.push({ rotulo: 'Campanha de Destaque', sub: `${pctDe(e.campanha)} · opcional`, valor: e.campanha, sinal: '-' });
     linhas.push({ rotulo: 'Taxa por item', sub: esp && esp.itens ? `${esp.itens} item(ns)${p?.tarifa.itens_estimados ? ' (pela taxa cobrada)' : ''}` : undefined, valor: e.por_item, sinal: '-' });
-    linhas.push({ rotulo: 'Devolução Fácil', sub: 'por pedido', valor: e.devolucao_facil, sinal: '-' });
-    if (e.cupom) {
-      linhas.push({ rotulo: 'Cupom da Shopee', sub: 'desconto dado ao comprador', valor: e.cupom, sinal: '-' });
-      linhas.push({ rotulo: 'A Shopee devolveu nas taxas', sub: 'compensação do cupom', valor: e.desconto_taxas, sinal: '+' });
-    }
+    if (e.devolucao_facil) linhas.push({ rotulo: 'Devolução Fácil', sub: 'por pedido', valor: e.devolucao_facil, sinal: '-' });
+    if (e.cupom) linhas.push({ rotulo: 'Cupom da Shopee', sub: 'desconto dado ao comprador', valor: e.cupom, sinal: '-' });
+    if (e.pix) linhas.push({ rotulo: 'Desconto no Pix', sub: 'desconto do pagamento via Pix', valor: e.pix, sinal: '-' });
+    if (e.cupom || e.pix)
+      linhas.push({
+        rotulo: 'A Shopee devolveu nas taxas',
+        sub: `compensação ${e.cupom && e.pix ? 'do cupom e do Pix' : e.pix ? 'do Pix' : 'do cupom'}`,
+        valor: e.desconto_taxas,
+        sinal: '+',
+      });
+    if (e.afiliados) linhas.push({ rotulo: 'Afiliados', sub: 'comissão do afiliado + taxa da Shopee sobre ela', valor: e.afiliados, sinal: '-' });
     linhas.push({
       rotulo: 'Frete pago pela loja',
       sub: `comprador ${reais(e.frete.comprador)} + Shopee ${reais(e.frete.desconto_shopee)} − transportadora ${reais(e.frete.transportadora)}`,
       valor: e.frete.loja_pagou,
       sinal: e.frete.loja_pagou ? '-' : '',
     });
+    if (e.envio_reverso) linhas.push({ rotulo: 'Frete de devolução', sub: 'frete de volta, pago pela loja', valor: e.envio_reverso, sinal: '-' });
     if (e.outros) linhas.push({ rotulo: 'Outros', valor: e.outros, sinal: e.outros > 0 ? '-' : '+' });
   }
   const shopee = e ? Math.round((e.preco - e.devolvido_antes - e.liquido) * 100) / 100 : 0;
@@ -642,7 +649,7 @@ function Avisos({ p }: { p: PedidoConferido }) {
       avisos.push({
         texto: 'devolvido',
         cls: 'chip-slate',
-        dica: `${d.antes ? `Devolvido ao comprador antes do pagamento: ${reais(d.antes)}. ` : ''}${d.depois ? `Debitado depois: ${reais(d.depois)} (até ${reais(d.limite)}). ` : ''}${d.compensado ? `Compensado: ${reais(d.compensado)}.` : ''}`,
+        dica: `${d.antes ? `Devolvido ao comprador antes do pagamento: ${reais(d.antes)}. ` : ''}${d.depois ? `Debitado depois: ${reais(d.depois)} (até ${reais(d.limite)}). ` : ''}${d.compensado ? `Compensado: ${reais(d.compensado)}. ` : ''}${p.recebido < 0 ? `A loja pagou ${reais(-p.recebido)} de frete nesta devolução.` : ''}`,
       });
   }
   if (p.perdido) {
@@ -669,7 +676,7 @@ function Avisos({ p }: { p: PedidoConferido }) {
     avisos.push({
       texto: liquido > 0 ? `cupom: custo ${reais(liquido)}` : 'cupom compensado',
       cls: liquido > 0 ? 'chip-amber' : 'chip-slate',
-      dica: `Cupom da Shopee ${reais(p.cupom.cupom)}; a Shopee devolveu ${reais(p.cupom.desconto_taxas)} em desconto nas taxas`,
+      dica: `Cupom da Shopee / desconto no Pix ${reais(p.cupom.cupom)}; a Shopee devolveu ${reais(p.cupom.desconto_taxas)} em desconto nas taxas`,
     });
   }
   if (!avisos.length) return <span className="text-slate-300">—</span>;
@@ -724,7 +731,7 @@ function ModalImportar({ open, clientId, empresa, onFechar }: { open: boolean; c
             <p>Escolha os relatórios baixados da Central do Vendedor (pode escolher os três de uma vez):</p>
             <ul className="list-disc space-y-0.5 pl-5 text-xs text-slate-600">
               <li>
-                <b>Pedidos</b> — Minhas vendas › Exportar (Order.all…xlsx)
+                <b>Pedidos</b> — Minhas vendas › aba <b>Todos</b> › Exportar (Order.all…xlsx; o da aba &quot;A enviar&quot;, Order.toship, não serve)
               </li>
               <li>
                 <b>Minha renda</b> — Minha renda › Lançado › Exportar (Income.lançado…xlsx)

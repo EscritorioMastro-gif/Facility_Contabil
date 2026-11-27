@@ -50,6 +50,13 @@ export type RepasseLido = {
   campanha: number;
   por_item: number;
   devolucao_facil: number;
+  /** comissão do afiliado (aba Renda) e a taxa da Shopee sobre ela (dentro da taxa de serviço) */
+  afiliados_comissao: number;
+  afiliados_servico: number;
+  /** desconto do Pix — a Shopee devolve em desconto nas taxas, como o cupom dela */
+  pix: number;
+  /** frete de volta da devolução */
+  envio_reverso: number;
   outros: number;
   liquido: number;
   frete_esperado: number | null;
@@ -164,7 +171,17 @@ const somaColunas = (row: Celula[], ix: Indice, nome: string) => {
   for (const [n, js] of ix) if (n.toLowerCase() === nome.toLowerCase()) for (const j of js) c += cents(numero(row[j] ?? null));
   return c;
 };
-const colunaQueComeca = (ix: Indice, prefixo: string) => [...ix.keys()].find((n) => n.toLowerCase().startsWith(prefixo.toLowerCase()));
+/** A primeira coluna com esse nome que tiver valor — a Shopee repete "Ajuste por pagamento via PIX" (uma fica vazia). */
+const primeiraComValor = (row: Celula[], ix: Indice, nome: string) => {
+  for (const [n, js] of ix)
+    if (n.toLowerCase() === nome.toLowerCase())
+      for (const j of js) {
+        const v = cents(numero(row[j] ?? null));
+        if (v) return v;
+      }
+  return 0;
+};
+const colunaQueComeca =(ix: Indice, prefixo: string) => [...ix.keys()].find((n) => n.toLowerCase().startsWith(prefixo.toLowerCase()));
 
 /** "Nome de usuário (Vendedor)" e o período (De / Para) do cabeçalho do relatório. */
 function infoDoCabecalho(linhas: Aba): { loja: string | null; periodo: Periodo } {
@@ -246,6 +263,11 @@ function lerPedidos(linhas: Aba): RelatorioShopee {
       valor_produtos: reais(p.itens.reduce((s, i) => s + cents(i.preco) * i.qtd, 0)),
     };
   });
+  // a aba "A enviar" exporta o mesmo arquivo (Order.toship…), vazio na maioria das vezes
+  if (!pedidos.length)
+    throw new RelatorioDesconhecido(
+      'Este relatório de pedidos não tem nenhum pedido. Se ele veio da aba "A enviar" (arquivo Order.toship…), exporte de novo pela aba "Todos" (arquivo Order.all…).',
+    );
   return { tipo: 'pedidos', loja: null, periodo: periodoDas(pedidos.map((p) => p.criado_em)), pedidos };
 }
 
@@ -258,8 +280,8 @@ function lerRenda(abas: Map<string, Aba>): RelatorioShopee {
   const info = infoDoCabecalho(abas.get('Summary') ?? []);
   const ajustes = infoDoCabecalho(abas.get('Adjustment') ?? []);
 
-  // as três partes da taxa de serviço, por pedido
-  const partes = new Map<string, { tr: number; ad: number; it: number }>();
+  // as partes da taxa de serviço, por pedido (a do afiliado só aparece em loja com afiliados)
+  const partes = new Map<string, { tr: number; ad: number; it: number; af: number }>();
   const det = cabecalho(abas.get('Service Fee Details') ?? [], ['ID do pedido']);
   if (det) {
     for (const row of det.dados) {
@@ -269,6 +291,7 @@ function lerRenda(abas: Map<string, Aba>): RelatorioShopee {
         tr: somaColunas(row, det.ix, 'Taxa de transação'),
         ad: somaColunas(row, det.ix, 'Taxa de serviço adicional'),
         it: somaColunas(row, det.ix, 'Taxa por item vendido'),
+        af: somaColunas(row, det.ix, 'Taxa de Serviço Afiliados do Vendedor'),
       });
     }
   }
@@ -307,12 +330,20 @@ function lerRenda(abas: Map<string, Aba>): RelatorioShopee {
       servico_bruta: c(row, 'Taxa de serviço bruta'),
       servico_liquida: c(row, 'Taxa de serviço líquida'),
       devolucao_facil: c(row, 'Taxa de Devolução Fácil Shopee'),
+      afiliados_comissao: c(row, 'Taxa de comissão Afiliados do Vendedor'),
+      pix: primeiraComValor(row, ix, 'Ajuste por pagamento via PIX'),
+      envio_reverso: c(row, 'Taxa de envio reverso'),
       liquido: c(row, 'Quantia total lançada (R$)'),
     };
     const explicado =
       v.preco + v.reembolso + v.cupom + v.incentivo_cupom + v.voucher_loja + v.frete_comprador + v.frete_desconto +
-      v.frete_transportadora + v.comissao_liquida + v.servico_liquida + v.devolucao_facil;
-    const pt = partes.get(id) ?? { tr: 0, ad: 0, it: 0 };
+      v.frete_transportadora + v.comissao_liquida + v.servico_liquida + v.devolucao_facil + v.afiliados_comissao + v.pix +
+      v.envio_reverso;
+    const pt = partes.get(id) ?? { tr: 0, ad: 0, it: 0, af: 0 };
+    // a taxa por item é o que sobra da taxa de serviço (o total da aba Renda é o
+    // certo): a coluna do detalhe já veio DOBRADA num pedido com itens de duas
+    // faixas de preço (2026-11-25)
+    const porItem = v.servico_liquida - pt.tr - pt.ad - pt.af;
     const f = frete.get(id);
     repasses.push({
       pedido: id,
@@ -332,8 +363,12 @@ function lerRenda(abas: Map<string, Aba>): RelatorioShopee {
       servico_liquida: reais(v.servico_liquida),
       transacao: reais(pt.tr),
       campanha: reais(pt.ad),
-      por_item: reais(pt.it),
+      por_item: reais(porItem),
       devolucao_facil: reais(v.devolucao_facil),
+      afiliados_comissao: reais(v.afiliados_comissao),
+      afiliados_servico: reais(pt.af),
+      pix: reais(v.pix),
+      envio_reverso: reais(v.envio_reverso),
       outros: reais(v.liquido - explicado),
       liquido: reais(v.liquido),
       frete_esperado: f?.esperado ?? null,

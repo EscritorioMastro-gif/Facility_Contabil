@@ -17,6 +17,9 @@ import {
   type Repasse,
   type Tarifa,
 } from './conferencia.js';
+import { lerXlsx } from './xlsx.js';
+import { lerRelatorioShopee, type RelatorioShopee } from './shopee.js';
+import { relatorioRendaLoja2 } from '../test/relatoriosShopee.js';
 
 const AGORA = new Date('2026-11-24T12:00:00-03:00');
 
@@ -271,4 +274,47 @@ it('faixas que se sobrepõem', () => {
 it('dia em São Paulo', () => {
   expect(diaEmSaoPaulo('2026-10-01T02:00:00Z')).toBe('2026-09-30');
   expect(diaEmSaoPaulo('2026-10-01')).toBe('2026-10-01');
+});
+
+describe('loja com faixas de preço, afiliados, Pix e frete de devolução', () => {
+  const faixa = (min: number, max: number | null, com: number, item: number): Tarifa => ({
+    vigencia_inicio: '2026-10-01',
+    vigencia_fim: null,
+    preco_min: min,
+    preco_max: max,
+    comissao_pct: com,
+    transacao_pct: 1.4,
+    campanha_pct: 0,
+    por_item: item,
+    por_pedido: 0,
+  });
+  const TAB2 = [faixa(0, 79.99, 18.6, 4.5), faixa(80, 99.99, 12.6, 16), faixa(100, 199.99, 12.6, 20)];
+  const rel = lerRelatorioShopee(lerXlsx(relatorioRendaLoja2())) as Extract<RelatorioShopee, { tipo: 'renda' }>;
+  const rep = (id: string) => rel.repasses.find((x) => x.pedido === id)!;
+  const ped = (id: string, itens: Pedido['itens']) => pedido({ pedido: id, criado_em: '2026-10-20T10:00:00-03:00', itens });
+
+  it('a taxa do afiliado não é "tarifa a mais" e aparece no extrato', () => {
+    const c = conferirPedido(ped('A1', [{ preco: 46.9, qtd: 1 }]), rep('A1'), [mov('renda_pedido', 25, 'A1')], TAB2, AGORA);
+    expect(c.tarifa.situacao).toBe('ok');
+    expect(c.extrato).toMatchObject({ afiliados: 8.02, por_item: 4.5, transacao: 0.66, outros: 0 });
+  });
+
+  it('itens de duas faixas no mesmo pedido e desconto no Pix compensado', () => {
+    const a3 = conferirPedido(ped('A3', [{ preco: 89.9, qtd: 1 }, { preco: 69.99, qtd: 1 }]), rep('A3'), [], TAB2, AGORA);
+    expect(a3.tarifa).toMatchObject({ situacao: 'ok', esperado: { comissao: 24.35, transacao: 2.24, por_item: 20.5 } });
+    expect(a3.extrato?.por_item).toBe(20.5);
+    const a2 = conferirPedido(ped('A2', [{ preco: 89.9, qtd: 1 }]), rep('A2'), [], TAB2, AGORA);
+    expect(a2.tarifa.situacao).toBe('ok');
+    expect(a2.cupom).toEqual({ cupom: 4.49, desconto_taxas: 4.49 });
+    expect(a2.extrato).toMatchObject({ pix: 4.49, cupom: 0, desconto_taxas: 4.49, por_item: 16 });
+  });
+
+  it('devolvido antes do pagamento com a loja pagando o frete: não é "debitado a mais"', () => {
+    const c = conferirPedido(ped('A4', [{ preco: 64.99, qtd: 1 }]), rep('A4'), [mov('renda_pedido', -24.62, 'A4')], TAB2, AGORA);
+    expect(c.devolucao).toMatchObject({ situacao: 'ok', a_mais: 0, limite: 0, antes: 64.99 });
+    expect(c.extrato).toMatchObject({ envio_reverso: 15, liquido: -24.62 });
+    // e um débito depois do pagamento numa venda que já saiu negativa é todo "a mais"
+    const d = conferirPedido(ped('A4', [{ preco: 64.99, qtd: 1 }]), rep('A4'), [mov('debito_devolucao', -5, 'A4')], TAB2, AGORA);
+    expect(d.devolucao).toMatchObject({ situacao: 'debitado_a_mais', a_mais: 5 });
+  });
 });

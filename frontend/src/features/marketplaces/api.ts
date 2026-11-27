@@ -38,9 +38,15 @@ export type Extrato = {
   campanha: number;
   por_item: number;
   devolucao_facil: number;
+  /** cupom da Shopee e desconto do Pix que a loja pagou; voltam em desconto nas taxas */
   cupom: number;
+  pix: number;
   desconto_taxas: number;
+  /** comissão do afiliado + a taxa da Shopee sobre ela */
+  afiliados: number;
   frete: { comprador: number; desconto_shopee: number; transportadora: number; loja_pagou: number };
+  /** frete de volta da devolução */
+  envio_reverso: number;
   outros: number;
   liquido: number;
   debito_devolucao: number;
@@ -179,7 +185,9 @@ export const CATEGORIAS_CUSTO = [
   'devolucao_facil',
   'voucher_loja',
   'cupom_shopee',
+  'afiliados',
   'frete_a_mais',
+  'frete_devolucao',
   'anuncios',
   'penalidade',
   'difal',
@@ -208,7 +216,17 @@ export type CustosMes = {
   aplicadas: Record<'comissao' | 'transacao' | 'campanha' | 'por_item' | 'por_pedido', Record<string, number>>;
 };
 export type TaxasAtuais = { comissao: number; transacao: number; campanha: number; por_item: number; por_pedido: number; desde: string };
-export type Custos = { de: string; ate: string; meses: CustosMes[]; total: CustosMes; taxas_atuais: TaxasAtuais | null; sem_carteira: boolean };
+/** taxas de uma faixa de preço do item, como a Shopee aplicou (preço por item visto de/até) */
+export type FaixaObservada = Omit<TaxasAtuais, 'desde'> & { preco_min: number; preco_max: number; pedidos: number };
+export type Custos = {
+  de: string;
+  ate: string;
+  meses: CustosMes[];
+  total: CustosMes;
+  taxas_atuais: TaxasAtuais | null;
+  faixas: FaixaObservada[];
+  sem_carteira: boolean;
+};
 
 const BASE = '/api/marketplaces/shopee';
 const CHAVE = ['marketplaces', 'shopee'] as const;

@@ -115,6 +115,85 @@ export function relatorioRenda() {
   });
 }
 
+/**
+ * 2ª loja (o que a 1ª não tinha): sem Devolução Fácil nem Campanha; afiliados,
+ * desconto no Pix (coluna repetida — aqui a 1ª vem vazia), frete de devolução,
+ * e a taxa por item DOBRADA no detalhe num pedido com itens de duas faixas.
+ *
+ *   A1 R$ 46,90 com afiliado: comissão do afiliado R$ 7,04 + taxa da Shopee R$ 0,98
+ *   A2 R$ 89,90 no Pix: desconto R$ 4,49, devolvido nas taxas (1,86 + 2,63)
+ *   A3 R$ 159,89 = 89,90 (12,6% + R$ 16) + 69,99 (18,6% + R$ 4,50): por item R$ 20,50, o detalhe diz R$ 41
+ *   A4 R$ 64,99 devolvido antes do pagamento: a loja pagou o frete (R$ 9,62) e a volta (R$ 15)
+ */
+export function relatorioRendaLoja2() {
+  const cab = [
+    'Número da sequência',
+    'Ver',
+    'ID do pedido',
+    'Data de criação do pedido',
+    'Data de conclusão do pagamento',
+    'Quantia total lançada (R$)',
+    'Preço do produto',
+    'Valor do Reembolso',
+    'Ajuste por pagamento via PIX',
+    'Cupom',
+    'Taxa de frete paga pelo comprador',
+    'Frete cobrado pelo parceiro logístico',
+    'Desconto de frete pela Shopee',
+    'Taxa de envio reverso',
+    'Taxa de comissão líquida',
+    'Taxa de serviço líquida',
+    'Taxa de comissão Afiliados do Vendedor',
+    'Nome de usuário (Comprador)',
+    'Taxa de comissão bruta',
+    'Taxa de serviço bruta',
+    'Ajuste por pagamento via PIX',
+  ];
+  // id, criado, liquido, preço, reembolso, pix, frete (comprador, transportadora, desconto), envio reverso, com L, srv L, afiliado, com B, srv B
+  const linha = (n: number, id: string, liq: number, preco: number, reemb: number, pix: number, fr: [number, number, number], rev: number, comL: number, srvL: number, afil: number, comB: number, srvB: number) => [
+    n,
+    'Order',
+    id,
+    '2026-10-20',
+    '2026-10-28',
+    liq,
+    preco,
+    reemb,
+    null,
+    0,
+    fr[0],
+    fr[1],
+    fr[2],
+    rev,
+    comL,
+    srvL,
+    afil,
+    COMPRADOR,
+    comB,
+    srvB,
+    pix,
+  ];
+  return xlsxDeTeste({
+    Summary: [['Nome de usuário (Vendedor)', 'loja_dois'], ['De', '2026-10-01'], ['Para', '2026-10-31']],
+    'Service Fee Details': [
+      [null, null, 'Taxa de serviço líquida'],
+      ['Número da sequência', 'ID do pedido', 'Taxa de Serviço Afiliados do Vendedor', 'Taxa de Transação', 'Taxa de transação', 'Taxa por item vendido'],
+      [1, 'A1', -0.98, 0, -0.66, -4.5],
+      [2, 'A2', 0, 0, -1.26, -13.37],
+      [3, 'A3', 0, 0, -2.24, -41],
+    ],
+    Renda: [
+      ['Informações do pedido'],
+      [],
+      cab,
+      linha(1, 'A1', 25, 46.9, 0, 0, [0, 0, 0], 0, -8.72, -6.14, -7.04, -8.72, -6.14),
+      linha(2, 'A2', 61.31, 89.9, 0, -4.49, [0, 0, 0], 0, -9.47, -14.63, 0, -11.33, -17.26),
+      linha(3, 'A3', 112.8, 159.89, 0, 0, [0, 0, 0], 0, -24.35, -22.74, 0, -24.35, -22.74),
+      linha(4, 'A4', -24.62, 64.99, -64.99, 0, [0, -12.82, 3.2], -15, 0, 0, 0, 0, 0),
+    ],
+  });
+}
+
 /** Saldo 100,00 → renda P1 +32,02 → DIFAL −3 → saque −100 → anúncios −20 → penalidade −5 (do mais novo pro mais antigo, como a Shopee exporta). */
 export function relatorioCarteira() {
   return xlsxDeTeste({

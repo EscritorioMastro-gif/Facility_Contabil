@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { lerXlsx, XlsxInvalido } from './xlsx.js';
 import { dataHora, lerRelatorioShopee, numero, RelatorioDesconhecido, type RelatorioShopee } from './shopee.js';
 import { xlsxDeTeste } from '../test/xlsx.js';
-import { COMPRADOR, CPF, relatorioCarteira, relatorioPedidos, relatorioRenda } from '../test/relatoriosShopee.js';
+import { COMPRADOR, CPF, relatorioCarteira, relatorioPedidos, relatorioRenda, relatorioRendaLoja2 } from '../test/relatoriosShopee.js';
 
 const ler = (buf: Buffer) => lerRelatorioShopee(lerXlsx(buf));
 
@@ -95,6 +95,10 @@ describe('relatório Minha renda', () => {
         campanha: -1.75,
         por_item: -4.5,
         devolucao_facil: -0.49,
+        afiliados_comissao: 0,
+        afiliados_servico: 0,
+        pix: 0,
+        envio_reverso: 0,
         outros: 0,
         liquido: 32.02,
         frete_esperado: 8.39,
@@ -106,6 +110,33 @@ describe('relatório Minha renda', () => {
   it('LGPD: o usuário do comprador não sai do leitor', () => {
     expect(JSON.stringify(rel)).not.toContain(COMPRADOR);
   });
+});
+
+describe('Minha renda de uma loja com afiliados, Pix e frete de devolução', () => {
+  const rel = ler(relatorioRendaLoja2()) as Extract<RelatorioShopee, { tipo: 'renda' }>;
+  const r = (id: string) => rel.repasses.find((x) => x.pedido === id)!;
+
+  it('cada cobrança na sua coluna, e nada sobra em "outros"', () => {
+    expect(r('A1')).toMatchObject({ afiliados_comissao: -7.04, afiliados_servico: -0.98, transacao: -0.66, por_item: -4.5, outros: 0 });
+    // a coluna do Pix vem repetida e a 1ª está vazia
+    expect(r('A2')).toMatchObject({ pix: -4.49, por_item: -13.37, outros: 0 });
+    expect(r('A4')).toMatchObject({ reembolso: -64.99, envio_reverso: -15, liquido: -24.62, outros: 0 });
+    expect(rel.repasses.every((x) => x.outros === 0 && x.devolucao_facil === 0)).toBe(true);
+  });
+
+  it('a taxa por item sai do total da taxa de serviço, não da coluna do detalhe (que veio dobrada)', () => {
+    expect(r('A3')).toMatchObject({ servico_liquida: -22.74, transacao: -2.24, por_item: -20.5 });
+  });
+
+  it('LGPD: o usuário do comprador não sai do leitor', () => {
+    expect(JSON.stringify(rel)).not.toContain(COMPRADOR);
+  });
+});
+
+it('relatório de pedidos sem nenhum pedido (o da aba "A enviar") é recusado dizendo qual exportar', () => {
+  const vazio = xlsxDeTeste({ orders: [['ID do pedido', 'Status do pedido', 'Quantidade', 'Data de criação do pedido']] });
+  expect(() => ler(vazio)).toThrow(RelatorioDesconhecido);
+  expect(() => ler(vazio)).toThrow(/aba "Todos".*Order\.all/);
 });
 
 describe('relatório da carteira', () => {

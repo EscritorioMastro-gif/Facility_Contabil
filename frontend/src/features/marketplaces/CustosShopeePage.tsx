@@ -3,7 +3,15 @@ import { Link } from 'react-router-dom';
 import { CarregandoLinhas, ErroCarregar, PageHeader, Segmented, Vazio } from '@/components/ui';
 import { IconSacola } from '@/components/icons';
 import { useClients } from '@/features/clients/api';
-import { useCustosShopee, type CategoriaCusto, type CustosMes, type TaxasAtuais } from './api';
+import {
+  useCustosShopee,
+  useTarifasShopee,
+  type CategoriaCusto,
+  type CustosMes,
+  type FaixaObservada,
+  type LinhaTarifa,
+  type TaxasAtuais,
+} from './api';
 import { dataCurta, reais } from './formato';
 
 /** "AAAA-MM" de hoje, em São Paulo, e N meses antes. */
@@ -26,18 +34,29 @@ const NOME: Record<CategoriaCusto, string> = {
   por_item: 'Taxa por item vendido',
   devolucao_facil: 'Devolução Fácil (por pedido)',
   voucher_loja: 'Voucher da loja',
-  cupom_shopee: 'Cupom da Shopee (líquido)',
+  cupom_shopee: 'Cupom da Shopee e Pix (líquido)',
+  afiliados: 'Afiliados',
   frete_a_mais: 'Frete a mais por peso',
+  frete_devolucao: 'Frete de devolução',
   anuncios: 'Anúncios (recarga)',
   penalidade: 'Penalidade',
   difal: 'DIFAL cobrado na fiscalização',
   outros: 'Outros',
 };
-const OPCIONAL: Partial<Record<CategoriaCusto, true>> = { campanha: true, anuncios: true };
+/** a explicação embaixo do nome */
+const NOTA: Partial<Record<CategoriaCusto, string>> = {
+  cupom_shopee: 'o que a loja pagou de cupom da Shopee e de desconto no Pix − o desconto que a Shopee devolveu nas taxas',
+  afiliados: 'comissão do afiliado que trouxe a venda + a taxa da Shopee sobre ela',
+  frete_devolucao: 'frete de volta das devoluções, pago pela loja',
+};
+const OPCIONAL: Partial<Record<CategoriaCusto, true>> = { campanha: true, anuncios: true, afiliados: true };
 const GRUPOS: Array<[string, CategoriaCusto[]]> = [
   ['Percentuais (sobre o preço)', ['comissao', 'transacao', 'campanha']],
   ['Fixas (por item e por pedido)', ['por_item', 'devolucao_facil']],
-  ['Outras cobranças', ['anuncios', 'voucher_loja', 'cupom_shopee', 'frete_a_mais', 'penalidade', 'difal', 'outros']],
+  [
+    'Outras cobranças',
+    ['anuncios', 'afiliados', 'voucher_loja', 'cupom_shopee', 'frete_a_mais', 'frete_devolucao', 'penalidade', 'difal', 'outros'],
+  ],
 ];
 const OUTRAS = GRUPOS[2]![1];
 /** Sem taxa observada nos pagamentos: a tabela que a Shopee divulgou em 28/10/2026. */
@@ -74,6 +93,8 @@ export function CustosShopeePage() {
   const [ate, setAte] = useState(mesDeHoje());
   const [de, setDe] = useState(mesesAntes(mesDeHoje(), 2));
   const { data, isLoading, error } = useCustosShopee(clientId, de, ate);
+  // a tabela de tarifas da loja, se preenchida, manda no simulador (faixas de preço exatas)
+  const { data: tabela } = useTarifasShopee(clientId || undefined, !!clientId);
   const [sel, setSel] = useState<string>('total');
   useEffect(() => setSel('total'), [clientId, de, ate]);
 
@@ -146,7 +167,7 @@ export function CustosShopeePage() {
             <Resumo m={m} />
             <Cobrancas m={m} />
             <Comparacao meses={data.meses} total={data.total} sel={sel} />
-            <Simulador taxas={data.taxas_atuais} total={data.total} />
+            <Simulador key={clientId} taxas={data.taxas_atuais} faixas={data.faixas ?? []} tabela={tabela?.tarifas ?? []} total={data.total} />
           </>
         )
       ) : null}
@@ -269,7 +290,7 @@ function Cobrancas({ m }: { m: CustosMes }) {
                     {NOME[c]}
                     {OPCIONAL[c] && <span className="ml-1 text-xs text-slate-400">opcional</span>}
                     {rot && <span className="block text-xs text-slate-400">{rot}</span>}
-                    {c === 'cupom_shopee' && <span className="block text-xs text-slate-400">o que a loja pagou − o desconto que a Shopee devolveu nas taxas</span>}
+                    {NOTA[c] && <span className="block text-xs text-slate-400">{NOTA[c]}</span>}
                   </span>
                   <div className="h-3.5">
                     <div className="h-3.5 rounded-r bg-sky-600" style={{ width: `${Math.max(0.5, (Math.abs(v) / max) * 100)}%` }} />
@@ -360,13 +381,93 @@ function Comparacao({ meses, total, sel }: { meses: CustosMes[]; total: CustosMe
   );
 }
 
-function Simulador({ taxas, total }: { taxas: TaxasAtuais | null; total: CustosMes }) {
+type Taxas5 = { comissao: number; transacao: number; campanha: number; por_item: number; por_pedido: number };
+/** Uma faixa de preço do item: vale a partir de `de` até onde a próxima começa (`ate` só pra mostrar). */
+type Faixa = Taxas5 & { de: number; ate: number | null; visto?: [number, number] };
+type OrigemTaxas = 'tabela' | 'observada' | 'dia' | 'padrao';
+
+/**
+ * As faixas do simulador: a tabela de tarifas da loja (a que vale hoje); sem
+ * ela, as faixas de preço que a Shopee aplicou (loja com itens de preços
+ * diferentes paga comissão e taxa por item diferentes); senão, as do dia.
+ */
+function faixasDoSimulador(tabela: LinhaTarifa[], faixas: FaixaObservada[], taxas: TaxasAtuais | null): { lista: Faixa[]; origem: OrigemTaxas } {
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const vigentes = tabela.filter((l) => l.vigencia_inicio <= hoje && (!l.vigencia_fim || hoje <= l.vigencia_fim));
+  const ordenar = (xs: Faixa[]) => [...xs].sort((x, y) => x.de - y.de);
+  if (vigentes.length)
+    return {
+      origem: 'tabela',
+      lista: ordenar(
+        vigentes.map((l) => ({
+          comissao: l.comissao_pct,
+          transacao: l.transacao_pct,
+          campanha: l.campanha_pct,
+          por_item: l.por_item,
+          por_pedido: l.por_pedido,
+          de: l.preco_min,
+          ate: l.preco_max,
+        })),
+      ),
+    };
+  if (faixas.length > 1) {
+    // o preço que cai entre duas faixas vistas usa a de cima (a mais cara): a faixa
+    // começa logo depois do maior preço visto na de baixo
+    const vistas = [...faixas].sort((x, y) => x.preco_min - y.preco_min);
+    return {
+      origem: 'observada',
+      lista: vistas.map((f, i) => ({
+        ...f,
+        de: i === 0 ? f.preco_min : Math.round((vistas[i - 1]!.preco_max + 0.01) * 100) / 100,
+        ate: f.preco_max,
+        visto: [f.preco_min, f.preco_max] as [number, number],
+      })),
+    };
+  }
   const t = taxas ?? PADRAO;
+  return { origem: taxas ? 'dia' : 'padrao', lista: [{ ...t, de: 0, ate: null }] };
+}
+
+/** A faixa do preço: a última que começa até ele (abaixo da primeira, a primeira). */
+const faixaDe = (lista: Faixa[], preco: number) => lista.filter((f) => f.de <= preco).at(-1) ?? lista[0]!;
+
+/**
+ * O menor preço que deixa `alvo` por item. Dentro de uma faixa a sobra cresce
+ * com o preço, mas pode cair na virada pra próxima (a taxa fixa sobe) — por
+ * isso procura faixa a faixa.
+ */
+function precoParaSobrar(lista: Faixa[], alvo: number, percDe: (f: Faixa) => number, fixoDe: (f: Faixa) => number): number | null {
+  for (let i = 0; i < lista.length; i++) {
+    const f = lista[i]!;
+    const perc = percDe(f);
+    if (perc >= 1) continue;
+    const inicio = i === 0 ? 0 : f.de;
+    const fim = lista[i + 1]?.de ?? Number.POSITIVE_INFINITY;
+    const x = (alvo + fixoDe(f)) / (1 - perc);
+    if (x < inicio) return inicio;
+    if (x < fim) return x;
+  }
+  return null;
+}
+
+function Simulador({
+  taxas,
+  faixas,
+  tabela,
+  total,
+}: {
+  taxas: TaxasAtuais | null;
+  faixas: FaixaObservada[];
+  tabela: LinhaTarifa[];
+  total: CustosMes;
+}) {
+  const { lista, origem } = faixasDoSimulador(tabela, faixas, taxas);
+  const temCampanha = lista.some((f) => f.campanha > 0);
   const extraPct = total.vendas_liquidas ? OUTRAS.reduce((s, c) => s + total.custos[c], 0) / total.vendas_liquidas : 0;
   const [preco, setPreco] = useState('49,99');
   const [itens, setItens] = useState('1');
   const [alvo, setAlvo] = useState('30,00');
-  const [campanha, setCampanha] = useState(t.campanha > 0);
+  const [campanha, setCampanha] = useState(temCampanha);
   const [extras, setExtras] = useState(true);
   // "49,99", "1.234,56" ou "49.99"
   const n = (s: string) => {
@@ -377,22 +478,47 @@ function Simulador({ taxas, total }: { taxas: TaxasAtuais | null; total: CustosM
   const q = Math.max(1, Math.round(n(itens) || 1));
   const a = n(alvo);
   const valido = p > 0 && Number.isFinite(a) && a >= 0;
-  const perc = (t.comissao + t.transacao + (campanha ? t.campanha : 0)) / 100 + (extras ? extraPct : 0);
-  const fixo = t.por_item + t.por_pedido / q;
+  const percDe = (f: Faixa) => (f.comissao + f.transacao + (campanha ? f.campanha : 0)) / 100 + (extras ? extraPct : 0);
+  const fixoDe = (f: Faixa) => f.por_item + f.por_pedido / q;
+  const t = faixaDe(lista, p > 0 ? p : 0);
+  const perc = percDe(t);
+  const fixo = fixoDe(t);
   const custo = p * perc + fixo;
-  const precoAlvo = (a + fixo) / (1 - perc);
+  const precoAlvo = precoParaSobrar(lista, a, percDe, fixoDe);
+  const outraFaixa = precoAlvo !== null && lista.length > 1 && faixaDe(lista, precoAlvo) !== t;
   const num = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  const deAte = (f: Faixa) =>
+    f.visto
+      ? f.visto[1] !== f.visto[0]
+        ? `itens de ${reais(f.visto[0])} a ${reais(f.visto[1])}`
+        : `itens de ${reais(f.visto[0])}`
+      : f.ate !== null
+        ? `de ${reais(f.de)} a ${reais(f.ate)}`
+        : `a partir de ${reais(f.de)}`;
+  const taxasDe = (f: Faixa) =>
+    `${num(f.comissao)}% + ${num(f.transacao)}%${f.campanha ? ` + ${num(f.campanha)}%` : ''} + ${reais(f.por_item)}`;
   return (
     <div className="card space-y-3 p-5">
       <div>
         <h2 className="text-sm font-semibold text-slate-800">Simulador de preço</h2>
         <p className="text-xs text-slate-500">
-          {taxas
-            ? `Pelas taxas que a Shopee aplicou nos pedidos criados desde ${dataCurta(taxas.desde)}`
-            : 'Pela tabela da Shopee de 28/10/2026 (sem pagamentos no período)'}
-          : comissão {num(t.comissao)}%, transação {num(t.transacao)}%, Campanha de Destaque {num(t.campanha)}%, {reais(t.por_item)} por item e{' '}
-          {reais(t.por_pedido)} por pedido. A sobra é antes do custo do produto.
+          {origem === 'tabela'
+            ? `Pela tabela de tarifas da loja${lista.length > 1 ? ` (faixa ${deAte(t)})` : ''}`
+            : origem === 'observada'
+              ? `Pelas taxas que a Shopee aplicou em ${deAte(t)}`
+              : origem === 'dia' && taxas
+                ? `Pelas taxas que a Shopee aplicou nos pedidos criados desde ${dataCurta(taxas.desde)}`
+                : 'Pela tabela da Shopee de 28/10/2026 (sem pagamentos no período)'}
+          : comissão {num(t.comissao)}%, transação {num(t.transacao)}%{t.campanha ? `, Campanha de Destaque ${num(t.campanha)}%` : ''},{' '}
+          {reais(t.por_item)} por item{t.por_pedido ? ` e ${reais(t.por_pedido)} por pedido` : ''}. A sobra é antes do custo do produto.
         </p>
+        {lista.length > 1 && (
+          <p className="mt-1 text-xs text-slate-500">
+            A taxa muda com o preço do item — {lista.map((f) => `${deAte(f)}: ${taxasDe(f)}`).join(' · ')}.
+            {origem === 'observada' &&
+              ' Preço entre duas faixas vistas nos pedidos usa a mais cara, por segurança; para o simulador usar as faixas exatas, preencha a tabela em Tarifas Shopee.'}
+          </p>
+        )}
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col">
@@ -409,10 +535,12 @@ function Simulador({ taxas, total }: { taxas: TaxasAtuais | null; total: CustosM
         </label>
       </div>
       <div className="flex flex-wrap gap-5 text-sm text-slate-600">
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={campanha} onChange={(e) => setCampanha(e.target.checked)} />
-          Campanha de Destaque ({num(t.campanha)}%, opcional)
-        </label>
+        {temCampanha && (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={campanha} onChange={(e) => setCampanha(e.target.checked)} />
+            Campanha de Destaque ({num(Math.max(...lista.map((f) => f.campanha)))}%, opcional)
+          </label>
+        )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={extras} onChange={(e) => setExtras(e.target.checked)} />
           Outras cobranças médias do período ({pct(extraPct, 2)})
@@ -422,20 +550,24 @@ function Simulador({ taxas, total }: { taxas: TaxasAtuais | null; total: CustosM
         <p className="text-sm text-red-600">Preencha o preço e o valor desejado com números positivos.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-4">
-          <Cartao rotulo="Taxas fixas" valor={reais(fixo)} detalhe={`${reais(t.por_item)} + ${reais(t.por_pedido / q)} · ${pct(fixo / p)} do preço`} />
+          <Cartao
+            rotulo="Taxas fixas"
+            valor={reais(fixo)}
+            detalhe={`${t.por_pedido ? `${reais(t.por_item)} + ${reais(t.por_pedido / q)}` : `${reais(t.por_item)} por item`} · ${pct(fixo / p)} do preço`}
+          />
           <Cartao rotulo="Taxas percentuais" valor={reais(p * perc)} detalhe={`${pct(perc, 1)} do preço`} />
           <Cartao rotulo="Sobra por item" valor={reais(p - custo)} detalhe={`a Shopee fica com ${pct(custo / p)}`} />
           <Cartao
             rotulo="Preço para sobrar o desejado"
-            valor={perc < 1 ? reais(precoAlvo) : '—'}
+            valor={precoAlvo !== null ? reais(precoAlvo) : '—'}
             detalhe={
-              perc >= 1
+              precoAlvo === null
                 ? 'as taxas passam de 100%'
-                : Math.abs(precoAlvo - p) < 0.005
-                  ? 'igual ao preço atual'
-                  : precoAlvo > p
-                    ? `${reais(precoAlvo - p)} acima do preço atual`
-                    : `${reais(p - precoAlvo)} abaixo do preço atual`
+                : (Math.abs(precoAlvo - p) < 0.005
+                    ? 'igual ao preço atual'
+                    : precoAlvo > p
+                      ? `${reais(precoAlvo - p)} acima do preço atual`
+                      : `${reais(p - precoAlvo)} abaixo do preço atual`) + (outraFaixa ? ' · em outra faixa de taxa' : '')
             }
           />
         </div>

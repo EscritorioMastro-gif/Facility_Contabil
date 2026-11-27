@@ -12,11 +12,16 @@
  *   - devolvido: o reembolso antes do pagamento + o preço dos itens devolvidos
  *     depois (o débito da carteira menos as taxas que a Shopee devolveu);
  *   - custos: comissão e taxas pela BRUTA, Devolução Fácil, voucher da loja,
- *     cupom da Shopee no líquido (o que a loja pagou − o desconto que voltou
- *     nas taxas; normalmente zero), frete a mais, anúncios, penalidade, DIFAL.
+ *     cupom da Shopee e desconto do Pix no líquido (o que a loja pagou − o
+ *     desconto que voltou nas taxas; normalmente zero), afiliados (comissão +
+ *     a taxa da Shopee sobre ela), frete a mais, frete de devolução, anúncios,
+ *     penalidade, DIFAL.
  *
- * As taxas aplicadas (18,6%, R$ 4,50…) saem dos próprios pagamentos, por dia
- * de criação do pedido — não dependem da tabela do cliente.
+ * As taxas aplicadas (18,6%, R$ 4,50…) saem dos próprios pagamentos — não
+ * dependem da tabela do cliente. Loja com itens de preços diferentes paga
+ * taxas por FAIXA de preço (2ª loja, 2026-11-25: 18,6% + R$ 4,50 até R$ 79,99;
+ * 12,6% + R$ 16 de R$ 80 a 99,99; 12,6% + R$ 20 de R$ 100 a 199,99): os rótulos
+ * saem de cada pedido e o simulador recebe as faixas observadas.
  */
 import { diaEmSaoPaulo, type Movimento, type Repasse } from './conferencia.js';
 
@@ -28,7 +33,9 @@ export const CATEGORIAS_CUSTO = [
   'devolucao_facil',
   'voucher_loja',
   'cupom_shopee',
+  'afiliados',
   'frete_a_mais',
+  'frete_devolucao',
   'anuncios',
   'penalidade',
   'difal',
@@ -92,24 +99,27 @@ export function custosDoRepasse(x: Repasse, taxas?: TaxasDoDia): Record<Categori
   o.comissao = -c(x.comissao_bruta);
   const srvB = c(x.servico_bruta);
   const srvL = c(x.servico_liquida);
+  // a taxa da Shopee sobre a comissão do afiliado vem dentro da taxa de serviço
+  const afilServ = -c(x.afiliados_servico ?? 0);
   if (srvB === srvL || srvL === 0) {
     o.transacao = -c(x.transacao);
     o.campanha = -c(x.campanha);
-    o.por_item = srvL === 0 ? -srvB - o.transacao - o.campanha : -c(x.por_item);
   } else if (taxas) {
     o.transacao = pctDe(base(x), taxas.transacao);
     o.campanha = pctDe(base(x), taxas.campanha);
-    o.por_item = -srvB - o.transacao - o.campanha;
   } else {
     const f = srvB / srvL;
     o.transacao = Math.round(-c(x.transacao) * f);
     o.campanha = Math.round(-c(x.campanha) * f);
-    o.por_item = -srvB - o.transacao - o.campanha;
   }
+  // por item = o resto da taxa de serviço (nunca a coluna do detalhe, que já veio dobrada)
+  o.por_item = -srvB - o.transacao - o.campanha - afilServ;
   o.devolucao_facil = -c(x.devolucao_facil);
   o.voucher_loja = -c(x.voucher_loja);
-  o.cupom_shopee = -(c(x.cupom) + c(x.incentivo_cupom) + c(x.comissao_liquida) - c(x.comissao_bruta) + srvL - srvB);
+  o.cupom_shopee = -(c(x.cupom) + c(x.incentivo_cupom) + c(x.pix ?? 0) + c(x.comissao_liquida) - c(x.comissao_bruta) + srvL - srvB);
+  o.afiliados = -c(x.afiliados_comissao ?? 0) + afilServ;
   o.frete_a_mais = -(c(x.frete_comprador) + c(x.frete_desconto) + c(x.frete_transportadora));
+  o.frete_devolucao = -c(x.envio_reverso ?? 0);
   o.outros = -c(x.outros);
   for (const k of CATEGORIAS_CUSTO) o[k] = o[k] || 0; // sem "-0"
   return o;
@@ -167,6 +177,56 @@ export function taxasObservadas(repasses: Repasse[], unidades: Map<string, numbe
   return out;
 }
 
+/** Taxas de uma faixa de preço do item, como a Shopee aplicou (preços por item, em reais). */
+export type FaixaObservada = TaxasDoDia & { preco_min: number; preco_max: number; pedidos: number };
+
+/**
+ * As faixas de preço que a Shopee aplicou nos pedidos criados desde `desde`:
+ * cada pedido sem devolução, de R$ 10 pra cima e com a quantidade de itens
+ * (relatório de pedidos), mostra a sua comissão, transação, campanha e R$ por
+ * item; pedidos com as mesmas taxas formam uma faixa (do menor ao maior preço
+ * por item visto). Faixa com 1 pedido só fica de fora (é pedido com itens de
+ * duas faixas, ou arredondamento); se duas faixas se cruzam no preço, vale a
+ * mais recente (a taxa mudou no meio).
+ */
+export function faixasObservadas(
+  repasses: Repasse[],
+  unidades: Map<string, number>,
+  obs: Map<string, TaxasDoDia>,
+  desde: string,
+): FaixaObservada[] {
+  const grupos = new Map<string, { t: TaxasDoDia; min: number; max: number; n: number; ultimo: string }>();
+  for (const x of repasses) {
+    const u = unidades.get(x.pedido);
+    const b = base(x);
+    if (!x.criado_dia || x.criado_dia < desde || c(x.reembolso) !== 0 || b < 1000 || !u) continue;
+    const cs = custosDoRepasse(x, obs.get(x.criado_dia));
+    if (cs.por_item <= 0 || cs.por_item % u !== 0) continue;
+    const t: TaxasDoDia = {
+      comissao: Math.round((cs.comissao * 1000) / b) / 10,
+      transacao: Math.round((cs.transacao * 1000) / b) / 10,
+      campanha: Math.round((cs.campanha * 1000) / b) / 10,
+      por_item: r(cs.por_item / u),
+      por_pedido: r(cs.devolucao_facil),
+    };
+    const k = JSON.stringify(t);
+    const unit = Math.round(b / u);
+    const g = grupos.get(k) ?? { t, min: unit, max: unit, n: 0, ultimo: x.criado_dia };
+    g.min = Math.min(g.min, unit);
+    g.max = Math.max(g.max, unit);
+    g.n++;
+    if (x.criado_dia > g.ultimo) g.ultimo = x.criado_dia;
+    grupos.set(k, g);
+  }
+  const todos = [...grupos.values()].reduce((s, g) => s + g.n, 0);
+  const validos = [...grupos.values()].filter((g) => g.n >= 2 || g.n === todos);
+  // se duas se cruzam no preço, fica a que apareceu por último
+  const ficam = validos.filter((g) => !validos.some((h) => h !== g && h.min <= g.max && g.min <= h.max && h.ultimo > g.ultimo));
+  return ficam
+    .sort((a, b) => a.min - b.min)
+    .map((g) => ({ ...g.t, preco_min: r(g.min), preco_max: r(g.max), pedidos: g.n }));
+}
+
 /** O dia mais recente com taxa observada — base do simulador de preço. */
 export function taxasAtuais(obs: Map<string, TaxasDoDia>): (TaxasDoDia & { desde: string }) | null {
   const dias = [...obs.keys()].sort();
@@ -217,17 +277,45 @@ export function custosPorMes(
   movimentos: Movimento[],
   repasses: Repasse[],
   unidades: Map<string, number>,
-): { meses: CustosMes[]; total: CustosMes; taxas_atuais: (TaxasDoDia & { desde: string }) | null } {
+): {
+  meses: CustosMes[];
+  total: CustosMes;
+  taxas_atuais: (TaxasDoDia & { desde: string }) | null;
+  faixas: FaixaObservada[];
+} {
   const repDe = new Map(repasses.map((x) => [x.pedido, x]));
   const obs = taxasObservadas(repasses, unidades);
   const meses = new Map<string, ReturnType<typeof novoMes>>();
   const ordem = [...movimentos].sort((a, b) => Date.parse(a.data) - Date.parse(b.data) || a.seq - b.seq);
+  const custosDe = (x: Repasse) => custosDoRepasse(x, x.criado_dia ? obs.get(x.criado_dia) : undefined);
 
-  const unidadesDe = (x: Repasse): number | null => {
+  // as taxas por item que a loja paga, em centavos (vistas em 2+ pedidos com a
+  // quantidade de itens, ou a mais comum de algum dia) — com faixas de preço, a
+  // do dia pode não ser a do pedido
+  const vistos = new Map<number, number>();
+  for (const x of repasses) {
+    const u = unidades.get(x.pedido);
+    if (!u || c(x.reembolso) !== 0) continue;
+    const pi = custosDe(x).por_item;
+    if (pi > 0 && pi % u === 0) vistos.set(pi / u, (vistos.get(pi / u) ?? 0) + 1);
+  }
+  for (const t of obs.values()) if (c(t.por_item) > 0) vistos.set(c(t.por_item), Math.max(2, vistos.get(c(t.por_item)) ?? 0));
+  const valoresPorItem = [...vistos.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([v]) => v);
+
+  /** itens do pedido: do relatório de pedidos; sem ele, a taxa por item cobrada ÷ uma taxa por item da loja (só se der certinho) */
+  const unidadesDe = (x: Repasse, porItemC: number): number | null => {
     const u = unidades.get(x.pedido);
     if (u !== undefined) return u;
-    const fixa = x.criado_dia ? obs.get(x.criado_dia)?.por_item : undefined;
-    return fixa ? Math.round(-c(x.por_item) / c(fixa)) : null;
+    const devolveuAntes = c(x.reembolso) !== 0;
+    if (porItemC <= 0) return devolveuAntes ? 0 : null;
+    const dia = x.criado_dia ? c(obs.get(x.criado_dia)?.por_item ?? 0) : 0;
+    for (const v of [dia, ...valoresPorItem]) {
+      if (v <= 0) continue;
+      const q = Math.round(porItemC / v);
+      if (q >= 1 && Math.abs(q * v - porItemC) <= q) return q;
+    }
+    // devolução parcial antes do pagamento: a taxa por item vem proporcional ao valor que ficou
+    return devolveuAntes && dia > 0 ? Math.round(porItemC / dia) : null;
   };
 
   let anterior: Movimento | null = null;
@@ -265,17 +353,25 @@ export function custosPorMes(
         acc.pedidos++;
         add('vendas', c(x.preco));
         add('devolvido', -c(x.reembolso));
-        const cs = custosDoRepasse(x, x.criado_dia ? obs.get(x.criado_dia) : undefined);
+        const cs = custosDe(x);
         for (const cat of CATEGORIAS_CUSTO) add(`c:${cat}`, cs[cat]);
-        const u = unidadesDe(x);
+        const u = unidadesDe(x, cs.por_item);
         if (u === null) acc.itens_sem_dado++;
         else acc.itens += u;
         const t = x.criado_dia ? obs.get(x.criado_dia) : undefined;
-        if (t && base(x) > 0) {
-          soma(acc.aplicadas.comissao, pctRotulo(t.comissao), 1);
-          soma(acc.aplicadas.transacao, pctRotulo(t.transacao), 1);
-          if (t.campanha) soma(acc.aplicadas.campanha, pctRotulo(t.campanha), 1);
-          if (u) soma(acc.aplicadas.por_item, reaisRotulo(c(t.por_item)), u);
+        const b = base(x);
+        if (t && b > 0) {
+          // a taxa do próprio pedido (com faixas de preço, a do dia pode não ser a dele);
+          // abaixo de R$ 10 o arredondamento no centavo distorce a % — fica a do dia
+          const propria = (custo: number, doDia: number) => (b >= 1000 ? Math.round((custo * 1000) / b) / 10 : doDia);
+          soma(acc.aplicadas.comissao, pctRotulo(propria(cs.comissao, t.comissao)), 1);
+          soma(acc.aplicadas.transacao, pctRotulo(propria(cs.transacao, t.transacao)), 1);
+          const camp = propria(cs.campanha, t.campanha);
+          if (camp) soma(acc.aplicadas.campanha, pctRotulo(camp), 1);
+          if (u) {
+            const porUn = cs.por_item % u === 0 && valoresPorItem.includes(cs.por_item / u) ? cs.por_item / u : c(t.por_item);
+            soma(acc.aplicadas.por_item, reaisRotulo(porUn), u);
+          }
         }
         if (c(x.devolucao_facil)) soma(acc.aplicadas.por_pedido, reaisRotulo(-c(x.devolucao_facil)), 1);
         break;
@@ -286,18 +382,20 @@ export function custosPorMes(
           break;
         }
         // devolução total = o que a loja recebeu, sem a taxa de R$ 0,49; parcial = a proporção
+        // (venda que já saiu negativa: não há o que devolver de taxa — o débito todo é devolução)
         const cheio = -(c(x.liquido) - c(x.devolucao_facil));
-        const f = cheio ? v / cheio : 0;
-        const cs = custosDoRepasse(x, x.criado_dia ? obs.get(x.criado_dia) : undefined);
+        const f = cheio < 0 ? v / cheio : 0;
+        const cs = custosDe(x);
         let devolvidas = 0;
         for (const cat of CATEGORIAS_CUSTO) {
-          if (cat === 'devolucao_facil') continue;
+          // os R$ 0,49 e o frete de volta não voltam
+          if (cat === 'devolucao_facil' || cat === 'frete_devolucao') continue;
           const y = Math.round(f * cs[cat]);
           add(`c:${cat}`, -y);
           devolvidas += y;
         }
         add('devolvido', -v + devolvidas);
-        const u = unidadesDe(x);
+        const u = unidadesDe(x, cs.por_item);
         if (u) acc.itens -= Math.round(f * u);
         break;
       }
@@ -362,5 +460,16 @@ export function custosPorMes(
     for (const tipo of ['comissao', 'transacao', 'campanha', 'por_item', 'por_pedido'] as const)
       for (const [rot, n] of Object.entries(m.aplicadas[tipo])) soma(total.aplicadas[tipo], rot, n);
   }
-  return { meses: lista.map(fechar), total: fechar(total), taxas_atuais: taxasAtuais(obs) };
+  // faixas de preço desde a última mudança de taxa; com poucos pedidos, os últimos 30 dias
+  const atuais = taxasAtuais(obs);
+  let faixas: FaixaObservada[] = [];
+  if (atuais) {
+    faixas = faixasObservadas(repasses, unidades, obs, atuais.desde);
+    if (faixas.reduce((s, f) => s + f.pedidos, 0) < 10) {
+      const ultimo = [...obs.keys()].sort().at(-1)!;
+      const mes = new Date(Date.parse(`${ultimo}T12:00:00Z`) - 30 * 86_400_000).toISOString().slice(0, 10);
+      if (mes < atuais.desde) faixas = faixasObservadas(repasses, unidades, obs, mes);
+    }
+  }
+  return { meses: lista.map(fechar), total: fechar(total), taxas_atuais: atuais, faixas };
 }

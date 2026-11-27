@@ -69,6 +69,13 @@ export type Repasse = {
   campanha: number;
   por_item: number;
   devolucao_facil: number;
+  /** programa de afiliados: a comissão do afiliado e a taxa da Shopee sobre ela (que vem dentro da taxa de serviço) */
+  afiliados_comissao?: number;
+  afiliados_servico?: number;
+  /** desconto do Pix (volta em desconto nas taxas, como o cupom da Shopee) */
+  pix?: number;
+  /** frete de volta da devolução */
+  envio_reverso?: number;
   outros: number;
   liquido: number;
   frete_esperado: number | null;
@@ -191,10 +198,15 @@ export type Extrato = {
   campanha: number;
   por_item: number;
   devolucao_facil: number;
-  /** cupom da Shopee que a loja pagou e o que voltou em desconto nas taxas */
+  /** cupom da Shopee e desconto do Pix que a loja pagou, e o que voltou em desconto nas taxas */
   cupom: number;
+  pix: number;
   desconto_taxas: number;
+  /** comissão do afiliado + a taxa da Shopee sobre ela */
+  afiliados: number;
   frete: { comprador: number; desconto_shopee: number; transportadora: number; loja_pagou: number };
+  /** frete de volta da devolução */
+  envio_reverso: number;
   outros: number;
   liquido: number;
   /** débito da devolução depois do pagamento e compensações (carteira) */
@@ -209,6 +221,7 @@ export type Extrato = {
  */
 export function extratoDoRepasse(rep: Repasse, esperado: TaxasEsperadas | null, debitoC = 0, compensadoC = 0): Extrato {
   const srvB = -c(rep.servico_bruta);
+  const afilServ = -c(rep.afiliados_servico ?? 0);
   let tr: number;
   let camp: number;
   if (c(rep.servico_bruta) === c(rep.servico_liquida) || c(rep.servico_liquida) === 0) {
@@ -231,16 +244,19 @@ export function extratoDoRepasse(rep: Repasse, esperado: TaxasEsperadas | null, 
     comissao: r(-c(rep.comissao_bruta)),
     transacao: r(tr),
     campanha: r(camp),
-    por_item: r(srvB - tr - camp),
+    por_item: r(srvB - tr - camp - afilServ),
     devolucao_facil: r(-c(rep.devolucao_facil)),
     cupom: r(-(c(rep.cupom) + c(rep.incentivo_cupom))),
+    pix: r(-c(rep.pix ?? 0)),
     desconto_taxas: r(c(rep.comissao_liquida) - c(rep.comissao_bruta) + c(rep.servico_liquida) - c(rep.servico_bruta)),
+    afiliados: r(-c(rep.afiliados_comissao ?? 0) + afilServ),
     frete: {
       comprador: rep.frete_comprador,
       desconto_shopee: rep.frete_desconto,
       transportadora: r(-c(rep.frete_transportadora)),
       loja_pagou: r(Math.max(0, -frete)),
     },
+    envio_reverso: r(-c(rep.envio_reverso ?? 0)),
     outros: r(-c(rep.outros)),
     liquido: rep.liquido,
     debito_devolucao: r(-debitoC),
@@ -373,8 +389,8 @@ export function tarifaEsperada(
   const com = pct(baseC, t.comissao_pct);
   const tr = pct(baseC, t.transacao_pct);
   const camp = pct(baseC, t.campanha_pct);
-  // a quantidade que explica a taxa por item cobrada (o resto da taxa de serviço)
-  const restoItem = -c(rep.servico_bruta) - tr - camp;
+  // a quantidade que explica a taxa por item cobrada (o resto da taxa de serviço, sem a do afiliado)
+  const restoItem = -c(rep.servico_bruta) + c(rep.afiliados_servico ?? 0) - tr - camp;
   const qtd = baseC === 0 ? 0 : c(t.por_item) > 0 ? Math.max(0, Math.round(restoItem / c(t.por_item))) : 0;
   return {
     esperado: {
@@ -431,9 +447,11 @@ export function conferirPedido(
     } else {
       const e = esp.esperado;
       const comissao = parte(c(e.comissao), -c(rep.comissao_bruta));
+      // a taxa da Shopee sobre a comissão do afiliado vem dentro da taxa de serviço,
+      // mas não é da tabela da loja — fica de fora da comparação
       const taxas = parte(
         c(e.transacao) + c(e.campanha) + c(e.por_item) + c(e.por_pedido),
-        -c(rep.servico_bruta) - c(rep.devolucao_facil),
+        -c(rep.servico_bruta) + c(rep.afiliados_servico ?? 0) - c(rep.devolucao_facil),
       );
       const algumaAMais = comissao.situacao === 'a_mais' || taxas.situacao === 'a_mais';
       const algumaAMenos = comissao.situacao === 'a_menos' || taxas.situacao === 'a_menos';
@@ -452,8 +470,10 @@ export function conferirPedido(
   let devolucao: Devolucao | null = null;
   const antesC = rep ? -c(rep.reembolso) : 0;
   if (antesC > 0 || debitoC < 0) {
-    const limiteC = rep ? c(rep.liquido) - c(rep.devolucao_facil) : null;
-    const aMaisC = limiteC !== null && -debitoC > limiteC ? -debitoC - limiteC : 0;
+    // o que a loja recebeu (sem os R$ 0,49) — se a venda já saiu NEGATIVA (devolvida
+    // antes do pagamento e a loja pagou o frete), o limite é zero, não negativo
+    const limiteC = rep ? Math.max(0, c(rep.liquido) - c(rep.devolucao_facil)) : null;
+    const aMaisC = debitoC < 0 && limiteC !== null && -debitoC > limiteC ? -debitoC - limiteC : 0;
     // só dá pra dizer "sem solicitação" com o relatório de pedidos (situação da devolução e itens devolvidos)
     const temSituacao = p.itens.length > 0;
     const devolveuItens = p.itens.some((i) => (i.devolvidos ?? 0) > 0);
@@ -486,11 +506,11 @@ export function conferirPedido(
     };
   }
 
-  // cupom da Shopee: o que a loja pagou × o desconto que voltou nas taxas
+  // cupom da Shopee e desconto do Pix: o que a loja pagou × o desconto que voltou nas taxas
   let cupom: ConferenciaPedido['cupom'] = null;
-  if (rep && (c(rep.cupom) !== 0 || c(rep.incentivo_cupom) !== 0)) {
+  if (rep && (c(rep.cupom) !== 0 || c(rep.incentivo_cupom) !== 0 || c(rep.pix ?? 0) !== 0)) {
     cupom = {
-      cupom: r(-(c(rep.cupom) + c(rep.incentivo_cupom))),
+      cupom: r(-(c(rep.cupom) + c(rep.incentivo_cupom) + c(rep.pix ?? 0))),
       desconto_taxas: r(c(rep.comissao_liquida) - c(rep.comissao_bruta) + c(rep.servico_liquida) - c(rep.servico_bruta)),
     };
   }
