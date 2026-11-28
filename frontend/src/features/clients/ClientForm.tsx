@@ -198,7 +198,8 @@ export function ClientForm({
 
       {apiMsg && <p className="alert alert-error">{apiMsg}</p>}
 
-      <div className="flex justify-end gap-2 pt-2">
+      {/* os botões ficam à vista no pé da janela enquanto o formulário rola */}
+      <div className="sticky bottom-0 z-10 -mx-6 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-6 py-3 backdrop-blur-sm">
         <button type="button" className="btn-ghost" onClick={onCancel}>
           Cancelar
         </button>
